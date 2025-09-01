@@ -6,6 +6,11 @@ const buyerSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  companyName: {
+    type: String,
+    required: true,
+    trim: true
+  },
   email: {
     type: String,
     trim: true

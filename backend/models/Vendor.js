@@ -27,6 +27,16 @@ const vendorSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  gstNo: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  accountNo: {
+    type: String,
+    required: true,
+    trim: true
   }
 }, {
   timestamps: true
