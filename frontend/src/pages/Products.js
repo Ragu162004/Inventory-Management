@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes, css } from 'styled-components';
-import { productsAPI } from '../services/api';
+import { productsAPI, vendorsAPI } from '../services/api';
 
 // Animations
 const fadeIn = keyframes`
@@ -331,8 +331,8 @@ const LoadingSpinner = styled.div`
   }
   
   @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+   0% { transform: rotate(0deg); }
+   100% { transform: rotate(360deg); }
   }
 `;
 
@@ -504,6 +504,31 @@ const PrimaryButton = styled.button`
   }
 `;
 
+const ImagePreview = styled.div`
+  margin-top: 0.5rem;
+  img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 8px;
+    border: 2px solid #f1f2f6;
+  }
+`;
+
+const RemoveImageButton = styled.button`
+  margin-top: 0.5rem;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  
+  &:hover {
+    background: #c0392b;
+  }
+`;
+
 const Products = () => {
   const [products, setProducts] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -516,13 +541,18 @@ const Products = () => {
     cost: '',
     quantity: '',
     reorderLevel: '5',
+    vendor: '',
+    photo: null,
+    imagePreview: ''
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
+  const [vendors, setVendors] = useState([]);
 
   useEffect(() => {
     fetchProducts();
+    fetchVendors();
   }, []);
 
   const fetchProducts = async () => {
@@ -538,6 +568,14 @@ const Products = () => {
     }
   };
 
+  const fetchVendors = async () => {
+    try {
+      const response = await vendorsAPI.getAll();
+      setVendors(response.data);
+    } catch (error) {
+      console.error('Failed to fetch vendors:', error);
+    }
+  };
 
   const handleShowModal = (product = null) => {
     if (product) {
@@ -550,6 +588,9 @@ const Products = () => {
         cost: product.cost,
         quantity: product.quantity,
         reorderLevel: product.reorderLevel,
+        vendor: product.vendor?._id || '',
+        photo: null,
+        imagePreview: product.image || ''
       });
     } else {
       setEditingProduct(null);
@@ -561,6 +602,9 @@ const Products = () => {
         cost: '',
         quantity: '',
         reorderLevel: '5',
+        vendor: '',
+        photo: null,
+        imagePreview: ''
       });
     }
     setShowModal(true);
@@ -581,15 +625,58 @@ const Products = () => {
     }));
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (!file.type.match('image.*')) {
+        setError('Please select an image file');
+        return;
+      }
+      
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image size must be less than 5MB');
+        return;
+      }
+      
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      
+      setFormData(prev => ({
+        ...prev,
+        photo: file,
+        imagePreview: previewUrl
+      }));
+      
+      setError('');
+    }
+  };
+
+  const removeImage = () => {
+    // Cleanup preview URL to prevent memory leaks
+    if (formData.imagePreview && formData.imagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(formData.imagePreview);
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      imagePreview: '',
+      photo: null
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const productData = {
-        ...formData,
+        name: formData.name,
+        description: formData.description,
+        category: formData.category,
         price: parseFloat(formData.price),
         cost: parseFloat(formData.cost),
         quantity: parseInt(formData.quantity),
-        reorderLevel: parseInt(formData.reorderLevel)
+        reorderLevel: parseInt(formData.reorderLevel),
+        vendor: formData.vendor,
+        photo: formData.photo // Include the file for upload
       };
 
       if (editingProduct) {
@@ -603,6 +690,7 @@ const Products = () => {
       handleCloseModal();
     } catch (error) {
       setError('Failed to save product. Please try again.');
+      console.error('Submit error:', error);
     }
   };
 
@@ -640,6 +728,39 @@ const Products = () => {
       style: 'currency',
       currency: 'USD'
     }).format(amount);
+  };
+
+  const ProductImage = ({ product }) => {
+    if (product.image) {
+      return (
+        <img 
+          src={product.image} 
+          alt={product.name}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '8px',
+            objectFit: 'cover'
+          }}
+        />
+      );
+    }
+
+    return (
+      <div style={{
+        width: '40px',
+        height: '40px',
+        borderRadius: '8px',
+        background: 'linear-gradient(135deg, #3498db, #2980b9)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'white',
+        fontWeight: 'bold'
+      }}>
+        {product.name.charAt(0)}
+      </div>
+    );
   };
 
   if (loading) {
@@ -699,19 +820,7 @@ const Products = () => {
                 <tr key={product._id}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '8px',
-                        background: 'linear-gradient(135deg, #3498db, #2980b9)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'white',
-                        fontWeight: 'bold'
-                      }}>
-                        {product.name.charAt(0)}
-                      </div>
+                      <ProductImage product={product} />
                       {product.name}
                     </div>
                   </td>
@@ -759,10 +868,6 @@ const Products = () => {
             <i className="bi bi-box"></i>
             <h3>No Products Found</h3>
             <p>Get started by adding your first product.</p>
-            {/* <ActionButton onClick={() => handleShowModal()}>
-              <i className="bi bi-plus-circle"></i>
-              Add Product
-            </ActionButton> */}
           </EmptyState>
         )}
       </TableContainer>
@@ -854,6 +959,38 @@ const Products = () => {
                   </FormGroup>
 
                   <FormGroup>
+                    <Label>Vendor *</Label>
+                    <Select
+                      name="vendor"
+                      value={formData.vendor}
+                      onChange={handleInputChange}
+                      required
+                    >
+                      <option value="">Select a vendor</option>
+                      {vendors.map(vendor => (
+                        <option key={vendor._id} value={vendor._id}>
+                          {vendor.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormGroup>
+
+                  <FormGroup>
+                    <Label>Product Image</Label>
+                    <Input
+                      type="file"
+                      name="photo"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                    />
+                    {formData.imagePreview && (
+                      <ImagePreview>
+                        <img src={formData.imagePreview} alt="Preview" />
+                        <RemoveImageButton type="button" onClick={removeImage}>
+                          Remove Image
+                        </RemoveImageButton>
+                      </ImagePreview>
+                    )}
                   </FormGroup>
                 </FormGrid>
 
@@ -871,7 +1008,9 @@ const Products = () => {
                 <SecondaryButton type="button" onClick={handleCloseModal}>
                   Cancel
                 </SecondaryButton>
-                <PrimaryButton type="submit">
+                <PrimaryButton 
+                  type="submit"
+                >
                   {editingProduct ? 'Update Product' : 'Create Product'}
                 </PrimaryButton>
               </ModalFooter>
