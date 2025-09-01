@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes, css } from 'styled-components';
-import { productsAPI, vendorsAPI } from '../services/api';
+import { productsAPI } from '../services/api';
 
 // Animations
 const fadeIn = keyframes`
@@ -506,7 +506,6 @@ const PrimaryButton = styled.button`
 
 const Products = () => {
   const [products, setProducts] = useState([]);
-  const [vendors, setVendors] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [formData, setFormData] = useState({
@@ -517,7 +516,6 @@ const Products = () => {
     cost: '',
     quantity: '',
     reorderLevel: '5',
-    vendor: ''
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -525,7 +523,6 @@ const Products = () => {
 
   useEffect(() => {
     fetchProducts();
-    fetchVendors();
   }, []);
 
   const fetchProducts = async () => {
@@ -541,14 +538,6 @@ const Products = () => {
     }
   };
 
-  const fetchVendors = async () => {
-    try {
-      const response = await vendorsAPI.getAll();
-      setVendors(response.data);
-    } catch (error) {
-      console.error('Failed to fetch vendors');
-    }
-  };
 
   const handleShowModal = (product = null) => {
     if (product) {
@@ -561,7 +550,6 @@ const Products = () => {
         cost: product.cost,
         quantity: product.quantity,
         reorderLevel: product.reorderLevel,
-        vendor: product.vendor._id
       });
     } else {
       setEditingProduct(null);
@@ -573,7 +561,6 @@ const Products = () => {
         cost: '',
         quantity: '',
         reorderLevel: '5',
-        vendor: ''
       });
     }
     setShowModal(true);
@@ -703,7 +690,6 @@ const Products = () => {
                 <th>Price</th>
                 <th>Cost</th>
                 <th>Stock Level</th>
-                <th>Vendor</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -743,7 +729,6 @@ const Products = () => {
                       </ProgressBar>
                     </StockIndicator>
                   </td>
-                  <td>{product.vendor?.name || 'N/A'}</td>
                   <td>
                     <StatusBadge variant={getStockStatus(product.quantity, product.reorderLevel)}>
                       {getStockStatusText(product.quantity, product.reorderLevel)}
@@ -869,20 +854,6 @@ const Products = () => {
                   </FormGroup>
 
                   <FormGroup>
-                    <Label>Vendor *</Label>
-                    <Select
-                      name="vendor"
-                      value={formData.vendor}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="">Select Vendor</option>
-                      {vendors.map(vendor => (
-                        <option key={vendor._id} value={vendor._id}>
-                          {vendor.name}
-                        </option>
-                      ))}
-                    </Select>
                   </FormGroup>
                 </FormGrid>
 

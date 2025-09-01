@@ -55,6 +55,8 @@ const saleSchema = new mongoose.Schema({
   timestamps: true
 });
 
+
+
 // Generate sale ID before saving
 saleSchema.pre('validate', async function(next) {
   if (this.isNew && !this.saleId) {
@@ -63,14 +65,5 @@ saleSchema.pre('validate', async function(next) {
   }
   next();
 });
-
-
-
-
-
-
-
-
-
 
 module.exports = mongoose.model('Sale', saleSchema);

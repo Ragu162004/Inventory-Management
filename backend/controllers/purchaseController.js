@@ -73,16 +73,18 @@ exports.createPurchase = async (req, res) => {
     
     const savedPurchase = await purchase.save({ session });
     
-    // Generate product items with barcodes
+    // Generate product items and assign the product's barcode to each item
     for (const item of items) {
+      // Get the product's barcode
+      const productDoc = await Product.findById(item.product);
       for (let i = 0; i < item.quantity; i++) {
         const productItem = new ProductItem({
           product: item.product,
+          barcode: productDoc.barcode,
           purchase: savedPurchase._id,
           purchasePrice: item.unitCost,
           sellingPrice: item.unitCost * 1.2 // 20% markup by default
         });
-        
         await productItem.save({ session });
       }
     }
@@ -123,6 +125,9 @@ exports.generatePurchaseBarcodes = async (req, res) => {
     
     const barcodes = await Promise.all(barcodePromises);
     res.json(barcodes);
+
+
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

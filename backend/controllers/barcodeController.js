@@ -8,10 +8,16 @@ exports.generateBarcode = async (req, res) => {
     
     const productItem = await ProductItem.findById(productItemId)
       .populate('product', 'name');
+
+
+
     
     if (!productItem) {
       return res.status(404).json({ message: 'Product item not found' });
     }
+
+    
+
     
     const barcodeBuffer = await generateBarcode(productItem.barcode);
     
@@ -20,6 +26,8 @@ exports.generateBarcode = async (req, res) => {
       productName: productItem.product.name,
       barcodeData: barcodeBuffer.toString('base64')
     });
+
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

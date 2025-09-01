@@ -30,8 +30,30 @@ exports.getProductById = async (req, res) => {
 // Create new product
 exports.createProduct = async (req, res) => {
   try {
-    const product = new Product(req.body);
+    const BarcodeCounter = require('../models/BarcodeCounter');
+    const prefix = 'IM001VP'; // You can make this dynamic if needed
+    // Find and update the counter atomically
+    const counter = await BarcodeCounter.findOneAndUpdate(
+      { prefix },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    const nextNumber = counter.seq;
+    const barcode = `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+
+    const product = new Product({ ...req.body, barcode });
     const savedProduct = await product.save();
+
+    // Generate barcode image for the product (optional: save or log the image)
+    const { generateBarcode } = require('../config/barcodeGenerator');
+    try {
+      const barcodeImage = await generateBarcode(savedProduct.barcode);
+      // Optionally, save barcodeImage to disk or database here
+      // Example: fs.writeFileSync(`barcodes/${savedProduct.barcode}.png`, barcodeImage);
+    } catch (barcodeErr) {
+      console.error('Failed to generate barcode image:', barcodeErr);
+    }
+
     res.status(201).json(savedProduct);
   } catch (error) {
     res.status(400).json({ message: error.message });

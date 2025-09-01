@@ -2,17 +2,22 @@ const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 
 const productItemSchema = new mongoose.Schema({
+
+
   barcode: {
     type: String,
-    required: true,
-    unique: true,
-    default: () => uuidv4()
+    required: true
   },
+
+
+
   product: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
     required: true
   },
+
+
   status: {
     type: String,
     enum: ['in_stock', 'sold', 'returned', 'damaged'],

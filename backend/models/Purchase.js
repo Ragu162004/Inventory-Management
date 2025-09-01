@@ -6,11 +6,13 @@ const purchaseSchema = new mongoose.Schema({
     unique: true,
     required: true
   },
+
   vendor: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Vendor',
     required: true
   },
+
   items: [{
     product: {
       type: mongoose.Schema.Types.ObjectId,
@@ -33,6 +35,8 @@ const purchaseSchema = new mongoose.Schema({
       min: 0
     }
   }],
+
+  
   totalAmount: {
     type: Number,
     required: true,
