@@ -49,6 +49,10 @@ const productSchema = new mongoose.Schema({
   vendor: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Vendor'
+  },
+  image: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

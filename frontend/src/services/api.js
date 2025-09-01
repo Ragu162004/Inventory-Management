@@ -32,8 +32,40 @@ export const productsAPI = {
   getAll: () => api.get('/products'),
   getLowStock: () => api.get('/products/low-stock'),
   getById: (id) => api.get(`/products/${id}`),
-  create: (data) => api.post('/products', data),
-  update: (id, data) => api.put(`/products/${id}`, data),
+  create: (data) => {
+    // Create FormData for file upload
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+      if (key === 'photo' && data[key]) {
+        formData.append('photo', data[key]);
+      } else if (key !== 'photo') {
+        formData.append(key, data[key]);
+      }
+    });
+    
+    return api.post('/products', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  update: (id, data) => {
+    // Create FormData for file upload
+    const formData = new FormData();
+    Object.keys(data).forEach(key => {
+      if (key === 'photo' && data[key]) {
+        formData.append('photo', data[key]);
+      } else if (key !== 'photo') {
+        formData.append(key, data[key]);
+      }
+    });
+    
+    return api.put(`/products/${id}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
   delete: (id) => api.delete(`/products/${id}`),
 };
 
