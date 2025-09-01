@@ -32,7 +32,9 @@ const fadeIn = keyframes`
 `;
 
 // Styled Components
-const SidebarContainer = styled.div`
+const SidebarContainer = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'mobileOpen'
+})`
   position: fixed;
   top: 0;
   left: 0;
@@ -67,7 +69,9 @@ const SidebarContainer = styled.div`
   }
 `;
 
-const SidebarHeader = styled.div`
+const SidebarHeader = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'collapsed'
+})`
   padding: 1.5rem 1.5rem 1rem;
   display: flex;
   align-items: center;
@@ -79,7 +83,9 @@ const SidebarHeader = styled.div`
   }
 `;
 
-const Logo = styled.div`
+const Logo = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'collapsed'
+})`
   display: ${props => props.collapsed ? 'none' : 'flex'};
   align-items: center;
   gap: 0.8rem;
@@ -116,7 +122,7 @@ const ToggleButton = styled.button`
   &.mobile-only {
     position: fixed;
     top: 15px;
-    left: 15px;
+    right: 15px;
     z-index: 1001;
     background: linear-gradient(135deg, #2c3e50 0%, #4a6fa5 100%);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
@@ -143,7 +149,9 @@ const NavSection = styled.div`
   }
 `;
 
-const SectionTitle = styled.h3`
+const SectionTitle = styled.h3.withConfig({
+  shouldForwardProp: (prop) => prop !== 'collapsed'
+})`
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -197,7 +205,9 @@ const NavLink = styled(Link)`
   }
 `;
 
-const NavIcon = styled.span`
+const NavIcon = styled.span.withConfig({
+  shouldForwardProp: (prop) => prop !== 'collapsed'
+})`
   margin-right: ${props => props.collapsed ? '0' : '0.8rem'};
   display: flex;
   align-items: center;
@@ -207,10 +217,13 @@ const NavIcon = styled.span`
 
   @media (max-width: 992px) {
     margin-right: 0.8rem;
+    
   }
 `;
 
-const NavText = styled.span`
+const NavText = styled.span.withConfig({
+  shouldForwardProp: (prop) => prop !== 'collapsed'
+})`
   display: ${props => props.collapsed ? 'none' : 'block'};
   white-space: nowrap;
   transition: all 0.3s ease;
@@ -261,7 +274,9 @@ const NavItemWithTooltip = styled.li`
   }
 `;
 
-const Overlay = styled.div`
+const Overlay = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'visible'
+})`
   position: fixed;
   top: 0;
   left: 0;

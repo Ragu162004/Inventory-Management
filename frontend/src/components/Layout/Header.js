@@ -244,7 +244,9 @@ const Badge = styled.span`
   animation: ${pulse} 2s infinite;
 `;
 
-const MobileMenu = styled.div`
+const MobileMenu = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'isOpen'
+})`
   display: ${props => props.isOpen ? 'flex' : 'none'};
   flex-direction: column;
   background: linear-gradient(135deg, #2c3e50 0%, #4a6fa5 100%);
@@ -365,7 +367,7 @@ const Header = () => {
               <i className="bi bi-search"></i>
             </SearchIcon>
           </SearchContainer>
-          
+{/*           
           <NavItems>
             <NavLink href="#" className="active">
               <i className="bi bi-speedometer2"></i>
@@ -395,7 +397,7 @@ const Header = () => {
             <MobileMenuButton onClick={toggleMobileMenu}>
               <i className={mobileMenuOpen ? "bi bi-x-lg" : "bi bi-list"}></i>
             </MobileMenuButton>
-          </NavItems>
+          </NavItems> */ }
         </Nav>
         
         <MobileMenu isOpen={mobileMenuOpen}>

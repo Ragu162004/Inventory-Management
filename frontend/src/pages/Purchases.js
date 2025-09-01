@@ -212,13 +212,12 @@ const ItemList = styled(ListGroup)`
 `;
 
 const TotalDisplay = styled.h5`
-    background: linear-gradient(to right, #3498db, #2ecc71);
+    background: linear-gradient(to right, #3498db);
   color: white;
   padding: 1rem 1.5rem;
   border-radius: 15px;
   text-align: center;
-  margin-top: 1.5rem;
-  animation: ${pulse} 2s infinite;
+
 `;
 
 const LoadingSpinner = styled(Spinner)`
@@ -579,7 +578,7 @@ const Purchases = () => {
               </Row>
 
               <h5 className="mt-4">Add Items</h5>
-              <Row className="align-items-end">
+              <Row className="align-items-center">
                 <Col md={5}>
                   <FormGroup>
                     <Form.Label>Product</Form.Label>
