@@ -781,13 +781,13 @@ const Products = () => {
   const downloadBarcode = async (barcode, productName) => {
     if (!barcode) return;
     try {
-      const response = await fetch(`https://inventory-management-mioi.vercel.app/api/barcode/${barcode}/barcode-image`);
+      const response = await fetch(`https://inventory-management-yexl.onrender.com/api/barcode/${barcode}/barcode-image`);
       if (!response.ok) throw new Error('Failed to fetch barcode image');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `barcode-${barcode}-${productName.replace(/\s+/g, '-')}.jpeg`;
+      link.download = `barcode-${barcode}-${productName.replace(/\s+/g, '-')}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
