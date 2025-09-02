@@ -529,6 +529,26 @@ const RemoveImageButton = styled.button`
   }
 `;
 
+const DownloadButton = styled.a`
+  background: rgba(46, 204, 113, 0.1);
+  color: #27ae60;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(46, 204, 113, 0.2);
+    transform: translateY(-2px);
+  }
+`;
+
 const Products = () => {
   const [products, setProducts] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -763,6 +783,26 @@ const Products = () => {
     );
   };
 
+  // Function to handle barcode download (fetch as blob for cross-browser support)
+  const downloadBarcode = async (barcode, productName) => {
+    if (!barcode) return;
+    try {
+      const response = await fetch(`http://localhost:5000/api/barcode/${barcode}/barcode-image`);
+      if (!response.ok) throw new Error('Failed to fetch barcode image');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `barcode-${barcode}-${productName.replace(/\s+/g, '-')}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download barcode image.');
+    }
+  };
+
   if (loading) {
     return (
       <PageContainer>
@@ -807,6 +847,7 @@ const Products = () => {
             <thead>
               <tr>
                 <th>Product</th>
+                <th>Barcode</th>
                 <th>Category</th>
                 <th>Price</th>
                 <th>Cost</th>
@@ -824,6 +865,7 @@ const Products = () => {
                       {product.name}
                     </div>
                   </td>
+                  <td>{product.barcode || '-'}</td>
                   <td>{product.category}</td>
                   <td>{formatCurrency(product.price)}</td>
                   <td>{formatCurrency(product.cost)}</td>
@@ -858,6 +900,17 @@ const Products = () => {
                     >
                       <i className="bi bi-trash"></i>
                     </IconButton>
+                    {product.barcode ? (
+                      <DownloadButton
+                        href="#"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          await downloadBarcode(product.barcode, product.name);
+                        }}
+                      >
+                        <i className="bi bi-download"></i>
+                      </DownloadButton>
+                    ) : '-'}
                   </ActionCell>
                 </tr>
               ))}

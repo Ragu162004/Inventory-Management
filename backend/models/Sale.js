@@ -12,11 +12,6 @@ const saleSchema = new mongoose.Schema({
     required: true
   },
   items: [{
-    productItem: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'ProductItem',
-      required: true
-    },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',

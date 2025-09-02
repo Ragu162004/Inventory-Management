@@ -12,6 +12,8 @@ exports.getAllProducts = async (req, res) => {
     const products = await Product.find()
       .populate('vendor', 'name contactPerson')
       .sort({ createdAt: -1 });
+
+      
     res.json(products);
   } catch (error) {
     res.status(500).json({ message: error.message });

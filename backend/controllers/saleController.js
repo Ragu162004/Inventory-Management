@@ -9,6 +9,7 @@ exports.getAllSales = async (req, res) => {
       .populate('buyer', 'name phone')
       .populate('items.product', 'name category')
       .sort({ saleDate: -1 });
+      console.log(sales);
     res.json(sales);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -20,8 +21,7 @@ exports.getSaleById = async (req, res) => {
   try {
     const sale = await Sale.findById(req.params.id)
       .populate('buyer', 'name phone email address')
-      .populate('items.product', 'name description category')
-      .populate('items.productItem', 'barcode');
+      .populate('items.product', 'name description category barcode');
     if (!sale) {
       return res.status(404).json({ message: 'Sale not found' });
     }
@@ -33,53 +33,38 @@ exports.getSaleById = async (req, res) => {
 
 // Create new sale
 exports.createSale = async (req, res) => {
-  const session = await Sale.startSession();
-  session.startTransaction();
-  
   try {
     const { buyer, items, saleDate } = req.body;
-    
-    // Verify all product items are available
-    const productItems = await ProductItem.find({
-      _id: { $in: items.map(item => item.productItem) },
-      status: 'in_stock'
-    }).session(session);
-    
-    if (productItems.length !== items.length) {
-      throw new Error('Some items are not available or already sold');
+    // Check all products exist and have enough quantity
+    const productIds = items.map(item => item.product);
+    const products = await Product.find({ _id: { $in: productIds } });
+    if (products.length !== items.length) {
+      return res.status(400).json({ message: 'Some products are not available' });
     }
-    
     // Calculate totals and prepare sale items
     let totalAmount = 0;
     const saleItems = [];
-    
     for (const item of items) {
-      const productItem = productItems.find(pi => pi._id.toString() === item.productItem);
-      const itemTotal = productItem.sellingPrice;
+      const product = products.find(p => p._id.toString() === item.product);
+      if (!product) {
+        return res.status(400).json({ message: `Product with id ${item.product} not found` });
+      }
+      if (product.quantity < 1) {
+        return res.status(400).json({ message: `Product ${product.name} is out of stock` });
+      }
+      const itemTotal = product.price;
       totalAmount += itemTotal;
-      
       saleItems.push({
-        productItem: item.productItem,
-        product: productItem.product,
-        unitPrice: productItem.sellingPrice,
+        product: product._id,
+        unitPrice: product.price,
         total: itemTotal
       });
-      
-      // Update product item status
-      await ProductItem.findByIdAndUpdate(
-        item.productItem,
-        { status: 'sold', sale: null }, // Will be updated with sale ID after sale creation
-        { session }
-      );
-      
       // Update product quantity
       await Product.findByIdAndUpdate(
-        productItem.product,
-        { $inc: { quantity: -1 } },
-        { session }
+        product._id,
+        { $inc: { quantity: -1 } }
       );
     }
-    
     // Create sale
     const sale = new Sale({
       buyer,
@@ -87,29 +72,13 @@ exports.createSale = async (req, res) => {
       totalAmount,
       saleDate: saleDate || new Date()
     });
-    
-    const savedSale = await sale.save({ session });
-    
-    // Update product items with sale reference
-    await ProductItem.updateMany(
-      { _id: { $in: items.map(item => item.productItem) } },
-      { sale: savedSale._id },
-      { session }
-    );
-    
-    await session.commitTransaction();
-    session.endSession();
-    
+    const savedSale = await sale.save();
     const populatedSale = await Sale.findById(savedSale._id)
       .populate('buyer', 'name phone')
-      .populate('items.product', 'name category')
-      .populate('items.productItem', 'barcode');
-    
+      .populate('items.product', 'name category');
     res.status(201).json(populatedSale);
   } catch (error) {
-    await session.abortTransaction();
     console.log(error.message)
-    session.endSession();
     res.status(400).json({ message: error.message });
   }
 };
@@ -118,20 +87,17 @@ exports.createSale = async (req, res) => {
 exports.scanBarcode = async (req, res) => {
   try {
     const { barcode } = req.body;
-    
-    const productItem = await ProductItem.findOne({ barcode, status: 'in_stock' })
-      .populate('product', 'name description category price')
-      .populate('purchase', 'purchaseDate');
-    
-    if (!productItem) {
-      return res.status(404).json({ message: 'Product not found or already sold' });
+    const product = await Product.findOne({ barcode });
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
     }
-    
     res.json({
-      productItem: productItem._id,
-      product: productItem.product,
-      barcode: productItem.barcode,
-      price: productItem.sellingPrice
+      product: product._id,
+      name: product.name,
+      description: product.description,
+      category: product.category,
+      price: product.price,
+      barcode: product.barcode
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

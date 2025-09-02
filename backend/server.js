@@ -24,6 +24,7 @@ app.use('/api/products', require('./routes/products'));
 app.use('/api/purchases', require('./routes/purchases'));
 app.use('/api/sales', require('./routes/sales'));
 app.use('/api/barcodes', require('./routes/barcodes'));
+app.use('/api/barcode', require('./routes/barcode'));
 
 // PDF generation endpoints
 app.get('/api/purchases/:id/invoice', async (req, res) => {
@@ -59,8 +60,7 @@ app.get('/api/sales/:id/invoice', async (req, res) => {
     
     const sale = await Sale.findById(req.params.id)
       .populate('buyer', 'name phone')
-      .populate('items.product', 'name')
-      .populate('items.productItem', 'barcode');
+      .populate('items.product', 'name barcode');
     
     if (!sale) {
       return res.status(404).json({ message: 'Sale not found' });

@@ -437,33 +437,41 @@ const Sales = () => {
     } catch { }
   };
 
-  // Add Item
-  const handleAddItem = async () => {
-    if (!scannedCode) return;
 
-    try {
-      const response = await salesAPI.scanBarcode({ barcode: scannedCode });
-      const scannedItem = response.data;
-
-      setFormData((prev) => ({
-        ...prev,
-        items: [
-          ...prev.items,
-          {
-            product: scannedItem.product,
-            productItem: scannedItem.productItem,
-            quantity: 1,
-            unitPrice: scannedItem.price,
-            barcode: scannedCode,
-          },
-        ],
-      }));
-
-      setScannedCode("");
-    } catch (error) {
-      setError("Invalid or sold barcode");
-    }
-  };
+  // Add Item (auto on scan)
+  useEffect(() => {
+    const addScannedItem = async () => {
+      if (!scannedCode) return;
+      try {
+        const response = await salesAPI.scanBarcode({ barcode: scannedCode });
+        const scannedItem = response.data;
+        setFormData((prev) => ({
+          ...prev,
+          items: [
+            ...prev.items,
+            {
+              product: scannedItem.product,
+              productItem: scannedItem.productItem,
+              quantity: 1,
+              unitPrice: scannedItem.price,
+              barcode: scannedCode,
+            },
+          ],
+        }));
+        setScannedCode("");
+        // Stop and restart scanner to prevent duplicate scans
+        stopScanner();
+        setTimeout(() => {
+          startScanner();
+        }, 500); // short delay to allow camera to reset
+      } catch (error) {
+        setError("Invalid or sold barcode");
+      }
+    };
+    addScannedItem();
+    // Only run when scannedCode changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scannedCode]);
 
   const removeItem = (index) => {
     setFormData((prev) => ({
@@ -661,13 +669,7 @@ const Sales = () => {
                 />
               </FormGroup>
 
-              <SecondaryButton
-                onClick={handleAddItem}
-                disabled={!scannedCode}
-                className="w-100 mb-4"
-              >
-                📊 Add Item
-              </SecondaryButton>
+              {/* Add Item button removed: item is now added automatically on scan */}
 
               <h6>Scanned Items ({formData.items.length})</h6>
               <ItemList>
@@ -739,11 +741,11 @@ const Sales = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedSale.items.map((item) => (
-                      <tr key={item._id}>
-                        <td>{item.product.name}</td>
-                        <td><BarcodeBadge>{item.productItem.barcode}</BarcodeBadge></td>
-                        <td>${item.unitPrice.toFixed(2)}</td>
+                    {(selectedSale.items || []).map((item, idx) => (
+                      <tr key={item._id || idx}>
+                        <td>{item.product?.name || '-'}</td>
+                        <td><BarcodeBadge>{item.product?.barcode || '-'}</BarcodeBadge></td>
+                        <td>${item.unitPrice?.toFixed(2) ?? '-'}</td>
                       </tr>
                     ))}
                   </tbody>

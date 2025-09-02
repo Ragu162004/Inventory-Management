@@ -82,11 +82,10 @@ exports.generateSaleInvoice = async (sale) => {
       doc.text('Price', 350, doc.y);
       doc.moveTo(50, doc.y + 5).lineTo(450, doc.y + 5).stroke();
       doc.moveDown();
-      
       // Table rows
       sale.items.forEach(item => {
         doc.text(item.product.name, 50, doc.y);
-        doc.text(item.productItem.barcode, 200, doc.y);
+        doc.text(item.product.barcode, 200, doc.y);
         doc.text(`$${item.unitPrice.toFixed(2)}`, 350, doc.y);
         doc.moveDown();
       });
