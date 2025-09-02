@@ -781,7 +781,7 @@ const Products = () => {
   const downloadBarcode = async (barcode, productName) => {
     if (!barcode) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/barcode/${barcode}/barcode-image`);
+      const response = await fetch(`https://inventory-management-mioi.vercel.app/api/barcode/${barcode}/barcode-image`);
       if (!response.ok) throw new Error('Failed to fetch barcode image');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
