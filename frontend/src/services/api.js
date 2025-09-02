@@ -9,7 +9,7 @@ const api = axios.create({
   },
 });
 
-// Vendors API
+// Vendors API using
 export const vendorsAPI = {
   getAll: () => api.get('/vendors'),
   getById: (id) => api.get(`/vendors/${id}`),
