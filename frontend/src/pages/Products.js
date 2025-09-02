@@ -787,7 +787,7 @@ const Products = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `barcode-${barcode}-${productName.replace(/\s+/g, '-')}.png`;
+      link.download = `barcode-${barcode}-${productName.replace(/\s+/g, '-')}.jpeg`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
