@@ -724,9 +724,9 @@ const Products = () => {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'INR'
     }).format(amount);
   };
 
@@ -885,7 +885,7 @@ const Products = () => {
               <ModalBody>
                 <FormGrid>
                   <FormGroup>
-                    <Label>Name *</Label>
+                    <Label>Name </Label>
                     <Input
                       type="text"
                       name="name"
@@ -897,7 +897,7 @@ const Products = () => {
                   </FormGroup>
 
                   <FormGroup>
-                    <Label>Category *</Label>
+                    <Label>Category </Label>
                     <Input
                       type="text"
                       name="category"
@@ -909,33 +909,33 @@ const Products = () => {
                   </FormGroup>
 
                   <FormGroup>
-                    <Label>Price ($) *</Label>
+                    <Label>Price </Label>
                     <Input
                       type="number"
-                      step="0.01"
+                      step="1"
                       name="price"
                       value={formData.price}
                       onChange={handleInputChange}
                       required
-                      placeholder="0.00"
+                      placeholder="0"
                     />
                   </FormGroup>
 
                   <FormGroup>
-                    <Label>Cost ($) *</Label>
+                    <Label>Cost </Label>
                     <Input
                       type="number"
-                      step="0.01"
+                      step="1"
                       name="cost"
                       value={formData.cost}
                       onChange={handleInputChange}
                       required
-                      placeholder="0.00"
+                      placeholder="0"
                     />
                   </FormGroup>
 
                   <FormGroup>
-                    <Label>Quantity *</Label>
+                    <Label>Quantity </Label>
                     <Input
                       type="number"
                       name="quantity"
@@ -947,19 +947,19 @@ const Products = () => {
                   </FormGroup>
 
                   <FormGroup>
-                    <Label>Reorder Level *</Label>
+                    <Label>Reorder Level </Label>
                     <Input
                       type="number"
                       name="reorderLevel"
                       value={formData.reorderLevel}
                       onChange={handleInputChange}
                       required
-                      placeholder="5"
+                      placeholder="0"
                     />
                   </FormGroup>
 
                   <FormGroup>
-                    <Label>Vendor *</Label>
+                    <Label>Vendor </Label>
                     <Select
                       name="vendor"
                       value={formData.vendor}

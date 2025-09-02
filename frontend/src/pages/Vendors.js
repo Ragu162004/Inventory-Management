@@ -354,7 +354,7 @@ const Vendors = () => {
           </ModalContainer>
         </ModalOverlay>
       )}
-    </PageContainer>
+    </PageContainer> 
   );
 };
 
