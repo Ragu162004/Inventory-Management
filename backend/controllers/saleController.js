@@ -35,34 +35,45 @@ exports.getSaleById = async (req, res) => {
 exports.createSale = async (req, res) => {
   try {
     const { buyer, items, saleDate } = req.body;
-    // Check all products exist and have enough quantity
-    const productIds = items.map(item => item.product);
-    const products = await Product.find({ _id: { $in: productIds } });
-    if (products.length !== items.length) {
+    // Group items by product and sum quantities
+    const productMap = new Map();
+    for (const item of items) {
+      const key = item.product;
+      if (!productMap.has(key)) {
+        productMap.set(key, { ...item, quantity: item.quantity || 1 });
+      } else {
+        productMap.get(key).quantity += item.quantity || 1;
+      }
+    }
+    const uniqueProductIds = Array.from(productMap.keys());
+    const products = await Product.find({ _id: { $in: uniqueProductIds } });
+    if (products.length !== uniqueProductIds.length) {
       return res.status(400).json({ message: 'Some products are not available' });
     }
     // Calculate totals and prepare sale items
     let totalAmount = 0;
     const saleItems = [];
-    for (const item of items) {
-      const product = products.find(p => p._id.toString() === item.product);
+    for (const productId of uniqueProductIds) {
+      const item = productMap.get(productId);
+      const product = products.find(p => p._id.toString() === productId);
       if (!product) {
-        return res.status(400).json({ message: `Product with id ${item.product} not found` });
+        return res.status(400).json({ message: `Product with id ${productId} not found` });
       }
-      if (product.quantity < 1) {
-        return res.status(400).json({ message: `Product ${product.name} is out of stock` });
+      if (product.quantity < item.quantity) {
+        return res.status(400).json({ message: `Product ${product.name} does not have enough stock` });
       }
-      const itemTotal = product.price;
+      const itemTotal = product.price * item.quantity;
       totalAmount += itemTotal;
       saleItems.push({
         product: product._id,
+        quantity: item.quantity,
         unitPrice: product.price,
         total: itemTotal
       });
       // Update product quantity
       await Product.findByIdAndUpdate(
         product._id,
-        { $inc: { quantity: -1 } }
+        { $inc: { quantity: -item.quantity } }
       );
     }
     // Create sale
@@ -75,7 +86,7 @@ exports.createSale = async (req, res) => {
     const savedSale = await sale.save();
     const populatedSale = await Sale.findById(savedSale._id)
       .populate('buyer', 'name phone')
-      .populate('items.product', 'name category');
+      .populate('items.product', 'name category barcode');
     res.status(201).json(populatedSale);
   } catch (error) {
     console.log(error.message)
