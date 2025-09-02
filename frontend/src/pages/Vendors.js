@@ -19,7 +19,7 @@ const pulse = keyframes`
   100% { transform: scale(1); }
 `;
 
-// Styled Components (same as Buyers for consistency)
+// Styled Components
 const PageContainer = styled.div`
   padding: 2rem;
   animation: ${fadeIn} 0.5s ease-out;
@@ -53,7 +53,7 @@ const PageTitle = styled.h2`
 `;
 
 const ActionButton = styled.button`
-    background: linear-gradient(to right, #3498db);
+  background: linear-gradient(to right, #3498db);
   color: white;
   border: none;
   border-radius: 8px;
@@ -110,6 +110,7 @@ const TableContainer = styled.div`
 const StyledTable = styled.table`
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;  /* ✅ Equal column widths */
 
   thead {
     background: linear-gradient(to right, #3498db);
@@ -118,7 +119,17 @@ const StyledTable = styled.table`
 
   th, td {
     padding: 1rem;
-    text-align: left;
+    text-align: center;   /* ✅ Center aligned */
+    vertical-align: middle;
+    word-wrap: break-word;
+  }
+
+  th, td {
+    width: calc(100% / 8);  /* ✅ Divide equally for 8 columns */
+  }
+
+  th:last-child, td:last-child {
+    width: 140px; /* ✅ Extra space for Actions column */
   }
 
   tbody tr {
@@ -133,6 +144,7 @@ const StyledTable = styled.table`
 
 const ActionCell = styled.td`
   display: flex;
+  justify-content: center; /* ✅ Keep buttons centered */
   gap: 0.5rem;
 `;
 
@@ -223,7 +235,7 @@ const Vendors = () => {
   const [vendors, setVendors] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingVendor, setEditingVendor] = useState(null);
-  const [formData, setFormData] = useState({ name: '', contactPerson: '', email: '', phone: '', address: '' });
+  const [formData, setFormData] = useState({ name: '', contactPerson: '', email: '', phone: '', address: '', gstNo: '', accountNo: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -240,7 +252,7 @@ const Vendors = () => {
 
   const handleShowModal = (vendor = null) => {
     setEditingVendor(vendor);
-    setFormData(vendor || { name: '', contactPerson: '', email: '', phone: '', address: '' });
+    setFormData(vendor || { name: '', contactPerson: '', email: '', phone: '', address: '' ,gstNo:'',accountNo:'' });
     setShowModal(true);
   };
 
@@ -292,6 +304,8 @@ const Vendors = () => {
               <th>Email</th>
               <th>Phone</th>
               <th>Address</th>
+              <th>GSTno</th>
+              <th>Account no</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -303,6 +317,8 @@ const Vendors = () => {
                 <td>{v.email}</td>
                 <td>{v.phone}</td>
                 <td>{v.address}</td>
+                <td>{v.gstNo}</td>
+                <td>{v.accountNo}</td>
                 <ActionCell>
                   <IconButton variant="edit" onClick={() => handleShowModal(v)}>✏️</IconButton>
                   <IconButton variant="danger" onClick={() => handleDelete(v._id)}>🗑️</IconButton>
@@ -327,6 +343,8 @@ const Vendors = () => {
                 <Input type="email" placeholder="Email" name="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                 <Input placeholder="Phone" name="phone" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} required />
                 <TextArea placeholder="Address" name="address" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} required />
+                <Input placeholder="GST No" name="gstNo" value={formData.gstNo} onChange={e => setFormData({...formData, gstNo: e.target.value})} required />
+                <Input placeholder="Account No" name="accountNo" value={formData.accountNo} onChange={e => setFormData({...formData, accountNo: e.target.value})} required />
               </ModalBody>
               <ModalFooter>
                 <SecondaryButton type="button" onClick={() => setShowModal(false)}>Cancel</SecondaryButton>
@@ -336,7 +354,7 @@ const Vendors = () => {
           </ModalContainer>
         </ModalOverlay>
       )}
-    </PageContainer>
+    </PageContainer> 
   );
 };
 

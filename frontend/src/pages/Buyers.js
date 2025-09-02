@@ -407,9 +407,11 @@ const Buyers = () => {
   const [editingBuyer, setEditingBuyer] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
+    companyName: '',
     email: '',
     phone: '',
     address: ''
+
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -437,6 +439,7 @@ const Buyers = () => {
       setEditingBuyer(buyer);
       setFormData({
         name: buyer.name,
+        companyName: buyer.companyName,
         email: buyer.email,
         phone: buyer.phone,
         address: buyer.address
@@ -445,6 +448,7 @@ const Buyers = () => {
       setEditingBuyer(null);
       setFormData({
         name: '',
+        companyName: '',
         email: '',
         phone: '',
         address: ''
@@ -550,6 +554,7 @@ const Buyers = () => {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Company Name</th>
                 <th>Email</th>
                 <th>Phone</th>
                 <th>Address</th>
@@ -577,6 +582,7 @@ const Buyers = () => {
                       {buyer.name}
                     </div>
                   </td>
+                  <td>{buyer.companyName}</td>
                   <td>{buyer.email}</td>
                   <td>{buyer.phone}</td>
                   <td>{buyer.address}</td>
@@ -623,6 +629,17 @@ const Buyers = () => {
                     onChange={handleInputChange}
                     required
                     placeholder="Enter buyer name"
+                  />
+                </FormGroup>
+                <FormGroup>
+                  <Label>Company Name *</Label>
+                  <Input
+                    type="text"
+                    name="companyName"
+                    value={formData.companyName}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="Enter company name"
                   />
                 </FormGroup>
                 <FormGroup>
