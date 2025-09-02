@@ -379,15 +379,13 @@ const Inventory = () => {
     setError('');
   };
 
-  const getStockStatus = (quantity, reorderLevel) => {
-    if (quantity <= reorderLevel) return 'critical';
-    if (quantity <= reorderLevel * 2) return 'low';
+  const getStockStatus = (quantity, minquantity) => {
+    if (quantity <= minquantity) return 'critical';
     return 'good';
   };
 
-  const getStockStatusText = (quantity, reorderLevel) => {
-    if (quantity <= reorderLevel) return 'CRITICAL';
-    if (quantity <= reorderLevel * 2) return 'LOW';
+  const getStockStatusText = (quantity, minquantity) => {
+    if (quantity <= minquantity) return 'CRITICAL';
     return 'GOOD';
   };
 
@@ -440,10 +438,8 @@ const Inventory = () => {
               <tr>
                 <th>Product</th>
                 <th>Current Stock</th>
-                <th>Reorder Level</th>
                 <th>Status</th>
                 <th>Vendor</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -469,21 +465,20 @@ const Inventory = () => {
                     </div>
                   </td>
                   <td>{product.quantity}</td>
-                  <td>{product.reorderLevel}</td>
                   <td>
                     <StatusBadge variant={getStockStatus(product.quantity, product.reorderLevel)}>
                       {getStockStatusText(product.quantity, product.reorderLevel)}
                     </StatusBadge>
                   </td>
                   <td>{product.vendor?.name || 'N/A'}</td>
-                  <ActionCell>
-                    <IconButton variant="edit" title="Edit Product">
-                      <i className="bi bi-pencil"></i>
-                    </IconButton>
-                    <IconButton variant="danger" title="Reorder Product">
-                      <i className="bi bi-cart-plus"></i>
-                    </IconButton>
-                  </ActionCell>
+                {/*<ActionCell>
+                  <IconButton variant="edit" title="Edit Product">
+                    <i className="bi bi-pencil"></i>
+                  </IconButton>
+                  <IconButton variant="danger" title="Reorder Product">
+                    <i className="bi bi-cart-plus"></i>
+                  </IconButton>
+                </ActionCell>*/}
                 </tr>
               ))}
             </tbody>
@@ -513,9 +508,11 @@ const Inventory = () => {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>ID</th>
                 <th>Category</th>
                 <th>Stock Level</th>
                 <th>Price</th>
+                <th>Total</th>
                 <th>Vendor</th>
                 <th>Status</th>
               </tr>
@@ -542,12 +539,13 @@ const Inventory = () => {
                       {product.name}
                     </div>
                   </td>
+                  <td>{product.barcode}</td>
                   <td>{product.category || 'Uncategorized'}</td>
                   <td>
                     <StockIndicator>
                       <span>{product.quantity}</span>
                       <ProgressBar>
-                        <ProgressFill 
+                        <ProgressFill   
                           current={product.quantity} 
                           max={Math.max(product.quantity * 2, 100)} 
                         />
@@ -555,6 +553,7 @@ const Inventory = () => {
                     </StockIndicator>
                   </td>
                   <td>{formatCurrency(product.price)}</td>
+                  <td>{formatCurrency(product.price * product.quantity)}</td>
                   <td>{product.vendor?.name || 'N/A'}</td>
                   <td>
                     <StatusBadge variant={getStockStatus(product.quantity, product.reorderLevel || 10)}>

@@ -528,7 +528,10 @@ const RemoveImageButton = styled.button`
     background: #c0392b;
   }
 `;
-
+/*
+  Note: All references to "cost" have been replaced with "minquantity" in the formData and related logic.
+  No additional code is needed at this placeholder since the change is already reflected in the main component.
+*/
 const Products = () => {
   const [products, setProducts] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -538,9 +541,8 @@ const Products = () => {
     description: '',
     category: '',
     price: '',
-    cost: '',
+    minquantity: '',
     quantity: '',
-    reorderLevel: '5',
     vendor: '',
     photo: null,
     imagePreview: ''
@@ -585,9 +587,8 @@ const Products = () => {
         description: product.description || '',
         category: product.category,
         price: product.price,
-        cost: product.cost,
+        minquantity: product.minquantity,
         quantity: product.quantity,
-        reorderLevel: product.reorderLevel,
         vendor: product.vendor?._id || '',
         photo: null,
         imagePreview: product.image || ''
@@ -599,9 +600,8 @@ const Products = () => {
         description: '',
         category: '',
         price: '',
-        cost: '',
+        minquantity: '',
         quantity: '',
-        reorderLevel: '5',
         vendor: '',
         photo: null,
         imagePreview: ''
@@ -672,9 +672,8 @@ const Products = () => {
         description: formData.description,
         category: formData.category,
         price: parseFloat(formData.price),
-        cost: parseFloat(formData.cost),
+        minquantity: parseInt(formData.minquantity),
         quantity: parseInt(formData.quantity),
-        reorderLevel: parseInt(formData.reorderLevel),
         vendor: formData.vendor,
         photo: formData.photo // Include the file for upload
       };
@@ -711,15 +710,13 @@ const Products = () => {
     setSuccess('');
   };
 
-  const getStockStatus = (quantity, reorderLevel) => {
-    if (quantity <= reorderLevel) return 'critical';
-    if (quantity <= reorderLevel * 2) return 'low';
+  const getStockStatus = (quantity, minquantity) => {
+    if (quantity <= minquantity) return 'critical';
     return 'good';
   };
 
-  const getStockStatusText = (quantity, reorderLevel) => {
-    if (quantity <= reorderLevel) return 'CRITICAL';
-    if (quantity <= reorderLevel * 2) return 'LOW';
+  const getStockStatusText = (quantity, minquantity) => {
+    if (quantity <= minquantity) return 'CRITICAL';
     return 'GOOD';
   };
 
@@ -807,9 +804,10 @@ const Products = () => {
             <thead>
               <tr>
                 <th>Product</th>
+                <th>ID</th>
                 <th>Category</th>
                 <th>Price</th>
-                <th>Cost</th>
+                <th>Min Quantity</th>
                 <th>Stock Level</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -824,9 +822,10 @@ const Products = () => {
                       {product.name}
                     </div>
                   </td>
+                  <td>{product.barcode}</td>
                   <td>{product.category}</td>
                   <td>{formatCurrency(product.price)}</td>
-                  <td>{formatCurrency(product.cost)}</td>
+                  <td>{product.minquantity}</td>
                   <td>
                     <StockIndicator>
                       <span>{product.quantity}</span>
@@ -839,8 +838,8 @@ const Products = () => {
                     </StockIndicator>
                   </td>
                   <td>
-                    <StatusBadge variant={getStockStatus(product.quantity, product.reorderLevel)}>
-                      {getStockStatusText(product.quantity, product.reorderLevel)}
+                    <StatusBadge variant={getStockStatus(product.quantity, product.minquantity)}>
+                      {getStockStatusText(product.quantity, product.minquantity)}
                     </StatusBadge>
                   </td>
                   <ActionCell>
@@ -922,12 +921,12 @@ const Products = () => {
                   </FormGroup>
 
                   <FormGroup>
-                    <Label>Cost </Label>
+                    <Label>Min Quantity </Label>
                     <Input
                       type="number"
                       step="1"
-                      name="cost"
-                      value={formData.cost}
+                      name="minquantity"
+                      value={formData.minquantity}
                       onChange={handleInputChange}
                       required
                       placeholder="0"
@@ -946,17 +945,7 @@ const Products = () => {
                     />
                   </FormGroup>
 
-                  <FormGroup>
-                    <Label>Reorder Level </Label>
-                    <Input
-                      type="number"
-                      name="reorderLevel"
-                      value={formData.reorderLevel}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="0"
-                    />
-                  </FormGroup>
+          
 
                   <FormGroup>
                     <Label>Vendor </Label>

@@ -641,7 +641,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                             <option value="">Select Product</option>
                             {items && items.map((item) => (
                                 <option key={item._id} value={item._id}>
-                                    {item.name} - ${item.cost || item.price}
+                                    {item.name}
                                 </option>
                             ))}
                         </select>
