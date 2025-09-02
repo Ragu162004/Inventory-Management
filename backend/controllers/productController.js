@@ -156,7 +156,7 @@ exports.deleteProduct = async (req, res) => {
 exports.getLowStockProducts = async (req, res) => {
   try {
     const products = await Product.find({
-      quantity: { $lte: { $ifNull: ['$reorderLevel', 5] } }
+      $expr: { $lte: ['$quantity', '$minquantity'] }
     }).populate('vendor', 'name');
     res.json(products);
   } catch (error) {
