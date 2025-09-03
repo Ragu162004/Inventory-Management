@@ -3,14 +3,31 @@
 import { useState, useEffect } from "react";
 
 function PurchaseOrder({ vendors = [], items = [] }) {
+    // Function to format numbers in Indian numbering system
+    const formatIndianNumber = (num) => {
+        if (num === undefined || num === null) return '0.00';
+        
+        // Convert to number if it's a string
+        const number = typeof num === 'string' ? parseFloat(num) : num;
+        
+        // Handle NaN cases
+        if (isNaN(number)) return '0.00';
+        
+        // Format the number with Indian numbering system
+        return number.toLocaleString('en-IN', {
+            maximumFractionDigits: 2,
+            minimumFractionDigits: 2
+        });
+    };
+
     // Declare hooks only once at the top
     const [selectedVendorId, setSelectedVendorId] = useState("");
     const [selectedItemId, setSelectedItemId] = useState("");
     const [formData, setFormData] = useState({
         companyName: "VelpaariEnterprises",
-        streetAddress: "kanakkampalayam",
-        cityStateZip: "erode tamilnadu",
-        phone: "9876543210",
+        streetAddress: "5/3 ,32b Pasumai nagar, Thiruchengode main road, Alampalayam(po)",
+        cityStateZip: " Erode-638008",
+        phone: "9500791500",
         date: new Date().toLocaleDateString(),
         poNumber: "",
         vendorCompany: "",
@@ -21,17 +38,19 @@ function PurchaseOrder({ vendors = [], items = [] }) {
         vendorEmail: "",
         vendorGstNo: "",
         vendorAccountNo: "",
-        shipToName: "",
-        shipToCompany: "",
-        shipToAddress: "",
-        shipToCityStateZip: "",
-        shipToPhone: "",
+        shipToName: "VELPAARI ENTERPRISES ",
+        shipToCompany: "VELPAARI ENTERPRISES",
+        shipToAddress: "5/3 ,32b Pasumai nagar, Thiruchengode main road, Alampalayam(po)",
+        shipToCityStateZip: "Erode-638008",
+        shipToPhone: "9500791500",
         items: [],
         subtotal: 0,
         tax: 0,
         taxAmount: 0,
         shipping: 0,
+        shippingNotes: "",
         other: 0,
+        otherNotes: "",
         total: 0,
         comments: "",
         contactName: "",
@@ -41,24 +60,30 @@ function PurchaseOrder({ vendors = [], items = [] }) {
 
     const [newItem, setNewItem] = useState({
         itemId: "",
+        barcodeId: "",
         description: "",
         quantity: 1,
         unitPrice: 0,
+        gstPercent: 0,
+        itemTotal: 0,
+        gstAmount: 0,
         total: 0,
     });
 
+    const [manualItemEntry, setManualItemEntry] = useState(false);
+
     useEffect(() => {
-        const subtotal = formData.items.reduce((sum, item) => sum + item.total, 0);
-        const taxPercent = Number(formData.tax) || 0;
-        const taxAmount = subtotal * (taxPercent / 100);
-        const total = subtotal + taxAmount + Number(formData.shipping) + Number(formData.other);
+        const subtotal = formData.items.reduce((sum, item) => sum + item.itemTotal, 0);
+        const gstTotal = formData.items.reduce((sum, item) => sum + item.gstAmount, 0);
+        const total = subtotal + gstTotal + Number(formData.shipping) + Number(formData.other);
+        
         setFormData((prev) => ({
             ...prev,
             subtotal,
-            taxAmount,
+            gstTotal,
             total,
         }));
-    }, [formData.items, formData.tax, formData.shipping, formData.other]);
+    }, [formData.items, formData.shipping, formData.other]);
 
     const handleInputChange = (field, value) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -88,29 +113,50 @@ function PurchaseOrder({ vendors = [], items = [] }) {
             setNewItem((prev) => ({
                 ...prev,
                 itemId: item._id,
+                barcodeId: item.barcodeId || item.barcode || "", // Get barcode ID from item
                 description: item.name,
                 unitPrice: item.cost || item.price || 0,
+                gstPercent: item.gstPercent || 0,
             }));
+            calculateItemTotals({
+                ...newItem,
+                itemId: item._id,
+                barcodeId: item.barcodeId || item.barcode || "",
+                description: item.name,
+                unitPrice: item.cost || item.price || 0,
+                gstPercent: item.gstPercent || 0,
+            });
         }
     };
 
-    const calculateItemTotal = () => {
-        const total = newItem.quantity * newItem.unitPrice;
-        setNewItem((prev) => ({ ...prev, total }));
+    const calculateItemTotals = (item) => {
+        const itemTotal = item.quantity * item.unitPrice;
+        const gstAmount = itemTotal * (item.gstPercent / 100);
+        const total = itemTotal + gstAmount;
+        
+        setNewItem((prev) => ({ 
+            ...prev, 
+            itemTotal,
+            gstAmount,
+            total
+        }));
     };
 
     const addItem = () => {
-        if (newItem.itemId && newItem.description) {
-            const itemWithTotal = { ...newItem, total: newItem.quantity * newItem.unitPrice };
+        if (newItem.description) {
             setFormData((prev) => ({
                 ...prev,
-                items: [...prev.items, itemWithTotal],
+                items: [...prev.items, {...newItem}],
             }));
             setNewItem({
-                itemId: "",
+                itemId: manualItemEntry ? "MANUAL" : "",
+                barcodeId: "",
                 description: "",
                 quantity: 1,
                 unitPrice: 0,
+                gstPercent: 0,
+                itemTotal: 0,
+                gstAmount: 0,
                 total: 0,
             });
             setSelectedItemId("");
@@ -133,7 +179,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                 <head>
                     <title>Purchase Order - ${formData.poNumber}</title>
                     <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        body { font-family: "Times New Roman", Times, serif; margin: 20px; }
                         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
                         .logo { width: 60px; height: 60px; border-radius: 50%; }
                         .title { color: red; font-size: 24px; font-weight: bold; text-align: center; }
@@ -148,6 +194,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                         .comments { border: 2px solid red; padding: 10px; margin: 20px 0; }
                         .comments-header { background: red; color: white; padding: 5px; margin: -10px -10px 10px -10px; }
                         .footer { text-align: center; margin-top: 30px; }
+                        .notes { font-style: italic; color: #555; margin-top: 5px; font-size: 0.9em; }
                     </style>
                 </head>
                 <body>
@@ -191,21 +238,27 @@ function PurchaseOrder({ vendors = [], items = [] }) {
 
                     <table class="table">
                         <tr>
-                            <th>ITEM #</th>
+                            <th>BARCODE ID</th>
                             <th>DESCRIPTION</th>
                             <th>QTY</th>
                             <th>UNIT PRICE</th>
+                            <th>GST %</th>
+                            <th>ITEM TOTAL</th>
+                            <th>GST AMOUNT</th>
                             <th>TOTAL</th>
                         </tr>
                         ${formData.items
                             .map(
                                 (item) => `
                             <tr>
-                                <td>${item.itemId}</td>
+                                <td>${item.barcodeId || item.itemId}</td>
                                 <td>${item.description}</td>
                                 <td>${item.quantity}</td>
-                                <td>${item.unitPrice.toFixed(2)}</td>
-                                <td>${item.total.toFixed(2)}</td>
+                                <td>₹ ${formatIndianNumber(item.unitPrice)}</td>
+                                <td>${item.gstPercent}%</td>
+                                <td>₹ ${formatIndianNumber(item.itemTotal)}</td>
+                                <td>₹ ${formatIndianNumber(item.gstAmount)}</td>
+                                <td>₹ ${formatIndianNumber(item.total)}</td>
                             </tr>
                         `
                             )
@@ -218,11 +271,13 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     </div>
 
                     <div class="totals">
-                        <div>SUBTOTAL: ${formData.subtotal.toFixed(2)}</div>
-                        <div>TAX (${formData.tax}%): ₹ ${(formData.taxAmount ? formData.taxAmount.toFixed(2) : "0.00")}</div>
-                        <div>SHIPPING: ${formData.shipping.toFixed(2)}</div>
-                        <div>OTHER: ${formData.other.toFixed(2)}</div>
-                        <div class="total-row">TOTAL: ₹ ${formData.total.toFixed(2)}</div>
+                        <div>SUBTOTAL: ₹ ${formatIndianNumber(formData.subtotal)}</div>
+                        <div>GST TOTAL: ₹ ${formatIndianNumber(formData.gstTotal)}</div>
+                        <div>SHIPPING: ₹ ${formatIndianNumber(formData.shipping)}</div>
+                        ${formData.shippingNotes ? `<div class="notes">${formData.shippingNotes}</div>` : ''}
+                        <div>OTHER: ₹ ${formatIndianNumber(formData.other)}</div>
+                        ${formData.otherNotes ? `<div class="notes">${formData.otherNotes}</div>` : ''}
+                        <div class="total-row">GRAND TOTAL: ₹ ${formatIndianNumber(formData.total)}</div>
                     </div>
 
                     <div class="footer">
@@ -245,7 +300,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     max-width: 1200px;
                     margin: 0 auto;
                     padding: 20px;
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    font-family: "Times New Roman", Times, serif;
                     color: #333;
                     background-color: #f9f9f9;
                     border-radius: 8px;
@@ -286,7 +341,8 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                 }
 
                 .form-row input,
-                .form-row select {
+                .form-row select,
+                .form-row textarea {
                     flex: 1;
                     min-width: 200px;
                 }
@@ -297,6 +353,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     border: 1px solid #ddd;
                     border-radius: 4px;
                     font-size: 14px;
+                    font-family: "Times New Roman", Times, serif;
                     transition: border-color 0.3s;
                 }
 
@@ -309,7 +366,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                 /* Item Form */
                 .item-form {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
                     gap: 15px;
                     align-items: end;
                     margin-bottom: 20px;
@@ -324,10 +381,29 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     cursor: pointer;
                     font-weight: bold;
                     transition: background 0.3s;
+                    font-family: "Times New Roman", Times, serif;
+                    grid-column: span 2;
                 }
 
                 .add-item-btn:hover {
                     background: #219653;
+                }
+
+                .manual-toggle {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    margin-bottom: 15px;
+                }
+
+                .item-totals {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 5px;
+                    margin-top: 10px;
+                    padding: 10px;
+                    background: #f8f9fa;
+                    border-radius: 4px;
                 }
 
                 /* Items Table */
@@ -339,6 +415,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     border-radius: 6px;
                     overflow: hidden;
                     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                    font-family: "Times New Roman", Times, serif;
                 }
 
                 .items-table th {
@@ -369,6 +446,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     border-radius: 4px;
                     cursor: pointer;
                     font-size: 12px;
+                    font-family: "Times New Roman", Times, serif;
                 }
 
                 .remove-btn:hover {
@@ -408,6 +486,11 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     border-top: 2px solid #2c3e50;
                 }
 
+                .notes-input {
+                    margin-top: 5px;
+                    font-size: 0.9em;
+                }
+
                 /* Download Button */
                 .download-section {
                     text-align: center;
@@ -424,20 +507,11 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     font-size: 16px;
                     font-weight: bold;
                     transition: all 0.3s ease;
+                    font-family: "Times New Roman", Times, serif;
                 }
 
                 .download-btn:hover {
                     background: #2980b9;
-                }
-
-                /* Debug Info */
-                .debug-info {
-                    background: #fff3cd;
-                    border: 1px solid #ffeaa7;
-                    border-radius: 4px;
-                    padding: 10px;
-                    margin-bottom: 20px;
-                    font-size: 14px;
                 }
 
                 /* Responsive Design */
@@ -448,7 +522,8 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     }
                     
                     .form-row input,
-                    .form-row select {
+                    .form-row select,
+                    .form-row textarea {
                         width: 100%;
                         min-width: auto;
                     }
@@ -459,11 +534,17 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     
                     .items-table {
                         font-size: 14px;
+                        display: block;
+                        overflow-x: auto;
                     }
                     
                     .items-table th,
                     .items-table td {
                         padding: 8px 10px;
+                    }
+
+                    .add-item-btn {
+                        grid-column: 1;
                     }
                 }
 
@@ -479,10 +560,6 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     }
                     
                     .remove-btn {
-                        display: none;
-                    }
-                    
-                    .debug-info {
                         display: none;
                     }
                 }
@@ -572,25 +649,21 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                         />
                     </div>
                     <div className="form-row">
-                        <input
-                            type="email"
-                            placeholder="Email"
-                            value={formData.vendorEmail}
-                            onChange={(e) => handleInputChange("vendorEmail", e.target.value)}
-                        />
+                        
                         <input
                             type="text"
                             placeholder="GST No"
                             value={formData.vendorGstNo}
                             onChange={(e) => handleInputChange("vendorGstNo", e.target.value)}
                         />
-                    </div>
+                    
                     <input
                         type="text"
                         placeholder="Account No"
                         value={formData.vendorAccountNo}
                         onChange={(e) => handleInputChange("vendorAccountNo", e.target.value)}
                     />
+                    </div>
                 </div>
 
                 <div className="form-section">
@@ -633,31 +706,60 @@ function PurchaseOrder({ vendors = [], items = [] }) {
 
                 <div className="form-section">
                     <h3>Add Items</h3>
+                    
+                    <div className="manual-toggle">
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={manualItemEntry}
+                                onChange={(e) => setManualItemEntry(e.target.checked)}
+                            />
+                            Manual Item Entry
+                        </label>
+                    </div>
+                    
                     <div className="item-form">
-                        <select
-                            value={selectedItemId}
-                            onChange={(e) => handleItemSelect(e.target.value)}
-                        >
-                            <option value="">Select Product</option>
-                            {items && items.map((item) => (
-                                <option key={item._id} value={item._id}>
-                                    {item.name}
-                                </option>
-                            ))}
-                        </select>
+                        {!manualItemEntry ? (
+                            <select
+                                value={selectedItemId}
+                                onChange={(e) => handleItemSelect(e.target.value)}
+                            >
+                                <option value="">Select Product</option>
+                                {items && items.map((item) => (
+                                    <option key={item._id} value={item._id}>
+                                        {item.name} {item.barcodeId ? `(Barcode: ${item.barcodeId})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <input
+                                type="text"
+                                placeholder="Barcode ID"
+                                value={newItem.barcodeId}
+                                onChange={(e) => {
+                                    setNewItem((prev) => ({ ...prev, barcodeId: e.target.value }));
+                                    calculateItemTotals({...newItem, barcodeId: e.target.value});
+                                }}
+                            />
+                        )}
+                        
                         <input
                             type="text"
                             placeholder="Description"
                             value={newItem.description}
-                            onChange={(e) => setNewItem((prev) => ({ ...prev, description: e.target.value }))}
+                            onChange={(e) => {
+                                setNewItem((prev) => ({ ...prev, description: e.target.value }));
+                                calculateItemTotals({...newItem, description: e.target.value});
+                            }}
                         />
                         <input
                             type="number"
                             placeholder="Quantity"
                             value={newItem.quantity}
                             onChange={(e) => {
-                                setNewItem((prev) => ({ ...prev, quantity: Number.parseInt(e.target.value) || 1 }));
-                                calculateItemTotal();
+                                const quantity = Number.parseInt(e.target.value) || 1;
+                                setNewItem((prev) => ({ ...prev, quantity }));
+                                calculateItemTotals({...newItem, quantity});
                             }}
                         />
                         <input
@@ -666,11 +768,30 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                             placeholder="Unit Price"
                             value={newItem.unitPrice}
                             onChange={(e) => {
-                                setNewItem((prev) => ({ ...prev, unitPrice: Number.parseFloat(e.target.value) || 0 }));
-                                calculateItemTotal();
+                                const unitPrice = Number.parseFloat(e.target.value) || 0;
+                                setNewItem((prev) => ({ ...prev, unitPrice }));
+                                calculateItemTotals({...newItem, unitPrice});
                             }}
                         />
-                        <span>Total: {(newItem.quantity * newItem.unitPrice).toFixed(2)}</span>
+                        <input
+                            type="number"
+                            step="0.01"
+                            placeholder="GST %"
+                            value={newItem.gstPercent}
+                            onChange={(e) => {
+                                const gstPercent = Number.parseFloat(e.target.value) || 0;
+                                setNewItem((prev) => ({ ...prev, gstPercent }));
+                                calculateItemTotals({...newItem, gstPercent});
+                            }}
+                        />
+                        
+                        <div className="item-totals">
+                            <div>Barcode ID: {newItem.barcodeId || "N/A"}</div>
+                            <div>Item Total: ₹ {formatIndianNumber(newItem.quantity * newItem.unitPrice)}</div>
+                            <div>GST Amount: ₹ {formatIndianNumber(newItem.quantity * newItem.unitPrice * (newItem.gstPercent / 100))}</div>
+                            <div><strong>Total: ₹ {formatIndianNumber(newItem.total)}</strong></div>
+                        </div>
+                        
                         <button onClick={addItem} className="add-item-btn">
                             Add Item
                         </button>
@@ -685,10 +806,13 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                         <table className="items-table">
                             <thead>
                                 <tr>
-                                    <th>Item #</th>
+                                    <th>Barcode ID</th>
                                     <th>Description</th>
-                                    <th>Quantity</th>
+                                    <th>Qty</th>
                                     <th>Unit Price</th>
+                                    <th>GST %</th>
+                                    <th>Item Total</th>
+                                    <th>GST Amount</th>
                                     <th>Total</th>
                                     <th>Action</th>
                                 </tr>
@@ -696,11 +820,14 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                             <tbody>
                                 {formData.items.map((item, index) => (
                                     <tr key={index}>
-                                        <td>{item.itemId}</td>
+                                        <td>{item.barcodeId || item.itemId}</td>
                                         <td>{item.description}</td>
                                         <td>{item.quantity}</td>
-                                        <td>{item.unitPrice.toFixed(2)}</td>
-                                        <td>{item.total.toFixed(2)}</td>
+                                        <td>₹ {formatIndianNumber(item.unitPrice)}</td>
+                                        <td>{item.gstPercent}%</td>
+                                        <td>₹ {formatIndianNumber(item.itemTotal)}</td>
+                                        <td>₹ {formatIndianNumber(item.gstAmount)}</td>
+                                        <td>₹ {formatIndianNumber(item.total)}</td>
                                         <td>
                                             <button onClick={() => removeItem(index)} className="remove-btn">
                                                 Remove
@@ -718,25 +845,15 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     <div className="totals-form">
                         <div className="total-row">
                             <label>Subtotal:</label>
-                            <span>{formData.subtotal.toFixed(2)}</span>
+                            <span>₹ {formatIndianNumber(formData.subtotal)}</span>
                         </div>
                         <div className="total-row">
-                            <label>Tax:</label>
-                                <input
-                                    type="text"
-                                    value={formData.tax}
-                                    onChange={(e) => {
-                                        const value = Number(e.target.value);
-                                        handleInputChange("tax", isNaN(value)  ?0 : value);
-                                    }}
-                                    placeholder="Tax (%)"
-                                />
-                            <span style={{ marginLeft: "1em", color: "#007bff" }}>
-                                Tax Amount: ₹ {formData.taxAmount !== undefined ? formData.taxAmount.toFixed(2) : "0.00"}
-                            </span>
+                            <label>GST Total:</label>
+                            <span>₹ {formatIndianNumber(formData.gstTotal)}</span>
                         </div>
                         <div className="total-row">
                             <label>Shipping:</label>
+                            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -744,10 +861,21 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                                     onChange={(e) => {
                                         handleInputChange("shipping", Number.parseFloat(e.target.value) || 0);
                                     }}
+                                    style={{width: '80px', marginBottom: '5px'}}
                                 />
+                                <textarea
+                                    className="notes-input"
+                                    placeholder="Shipping notes"
+                                    value={formData.shippingNotes}
+                                    onChange={(e) => handleInputChange("shippingNotes", e.target.value)}
+                                    rows={2}
+                                    style={{width: '200px'}}
+                                />
+                            </div>
                         </div>
                         <div className="total-row">
                             <label>Other:</label>
+                            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end'}}>
                                 <input
                                     type="number"
                                     step="0.01"
@@ -755,23 +883,23 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                                     onChange={(e) => {
                                         handleInputChange("other", Number.parseFloat(e.target.value) || 0);
                                     }}
+                                    style={{width: '80px', marginBottom: '5px'}}
                                 />
+                                <textarea
+                                    className="notes-input"
+                                    placeholder="Other charges notes"
+                                    value={formData.otherNotes}
+                                    onChange={(e) => handleInputChange("otherNotes", e.target.value)}
+                                    rows={2}
+                                    style={{width: '200px'}}
+                                />
+                            </div>
                         </div>
                         <div className="total-row total-final">
-                            <label>Total:</label>
-                            <span>₹ {formData.total.toFixed(2)}</span>
+                            <label>Grand Total:</label>
+                            <span>₹ {formatIndianNumber(formData.total)}</span>
                         </div>
-                        </div>
-                </div>
-
-                <div className="form-section">
-                    <h3>Comments</h3>
-                    <textarea
-                        placeholder="Comments or Special Instructions"
-                        value={formData.comments}
-                        onChange={(e) => handleInputChange("comments", e.target.value)}
-                        rows={4}
-                    />
+                    </div>
                 </div>
 
                 <div className="form-section">
@@ -783,7 +911,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                             value={formData.contactName}
                             onChange={(e) => handleInputChange("contactName", e.target.value)}
                         />
-                        <input
+                        <input 
                             type="text"
                             placeholder="Contact Phone"
                             value={formData.contactPhone}

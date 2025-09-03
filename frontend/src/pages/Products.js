@@ -30,6 +30,11 @@ const progressBar = keyframes`
   to { width: 100%; }
 `;
 
+const zoomIn = keyframes`
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+`;
+
 // Styled Components
 const PageContainer = styled.div`
   padding: 2rem;
@@ -179,23 +184,29 @@ const StyledTable = styled.table`
     color: #2c3e50;
   }
   
+  /* Make S.No column narrower */
+  th:first-child, td:first-child {
+    width: 60px;
+    text-align: center;
+  }
+  
   @media (max-width: 1200px) {
+    th:nth-child(5),
+    td:nth-child(5) {
+      display: none;
+    }
+  }
+  
+  @media (max-width: 992px) {
     th:nth-child(4),
     td:nth-child(4) {
       display: none;
     }
   }
   
-  @media (max-width: 992px) {
-    th:nth-child(3),
-    td:nth-child(3) {
-      display: none;
-    }
-  }
-  
   @media (max-width: 768px) {
-    th:nth-child(6),
-    td:nth-child(6) {
+    th:nth-child(7),
+    td:nth-child(7) {
       display: none;
     }
   }
@@ -549,6 +560,56 @@ const DownloadButton = styled.a`
   }
 `;
 
+// Image Preview Modal Styles
+const ImagePreviewModal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: ${fadeIn} 0.3s ease-out;
+`;
+
+const ImagePreviewContainer = styled.div`
+  max-width: 90vw;
+  max-height: 90vh;
+  animation: ${zoomIn} 0.3s ease-out;
+`;
+
+const PreviewImage = styled.img`
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+`;
+
+const ClosePreviewButton = styled.button`
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+  }
+`;
+
 const Products = () => {
   const [products, setProducts] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -568,6 +629,7 @@ const Products = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const [vendors, setVendors] = useState([]);
+  const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
     fetchProducts();
@@ -744,6 +806,14 @@ const Products = () => {
     }).format(amount);
   };
 
+  const openImagePreview = (imageUrl) => {
+    setImagePreview(imageUrl);
+  };
+
+  const closeImagePreview = () => {
+    setImagePreview(null);
+  };
+
   const ProductImage = ({ product }) => {
     if (product.image) {
       return (
@@ -754,8 +824,10 @@ const Products = () => {
             width: '40px',
             height: '40px',
             borderRadius: '8px',
-            objectFit: 'cover'
+            objectFit: 'cover',
+            cursor: 'pointer'
           }}
+          onClick={() => openImagePreview(product.image)}
         />
       );
     }
@@ -840,6 +912,7 @@ const Products = () => {
           <StyledTable>
             <thead>
               <tr>
+                <th>S.No</th> {/* Added Serial Number column */}
                 <th>Product</th>
                 <th>Barcode</th>
                 <th>Category</th>
@@ -851,8 +924,9 @@ const Products = () => {
               </tr>
             </thead>
             <tbody>
-              {products.map(product => (
+              {products.map((product, index) => (
                 <tr key={product._id}>
+                  <td>{index + 1}</td> {/* Serial Number */}
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <ProductImage product={product} />
@@ -993,8 +1067,6 @@ const Products = () => {
                     />
                   </FormGroup>
 
-          
-
                   <FormGroup>
                     <Label>Vendor </Label>
                     <Select
@@ -1054,6 +1126,18 @@ const Products = () => {
             </form>
           </ModalContainer>
         </ModalOverlay>
+      )}
+
+      {/* Image Preview Modal */}
+      {imagePreview && (
+        <ImagePreviewModal onClick={closeImagePreview}>
+          <ClosePreviewButton onClick={closeImagePreview}>
+            <i className="bi bi-x"></i>
+          </ClosePreviewButton>
+          <ImagePreviewContainer onClick={(e) => e.stopPropagation()}>
+            <PreviewImage src={imagePreview} alt="Product preview" />
+          </ImagePreviewContainer>
+        </ImagePreviewModal>
       )}
     </PageContainer>
   );
