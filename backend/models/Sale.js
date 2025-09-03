@@ -30,8 +30,46 @@ const saleSchema = new mongoose.Schema({
       type: Number,
       required: true,
       min: 0
+    },
+    barcode: {
+      type: String
     }
   }],
+  subtotal: {
+    type: Number,
+    min: 0
+  },
+  discount: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100
+  },
+  discountAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  tax: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  taxAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  shipping: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  other: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   totalAmount: {
     type: Number,
     required: true,
