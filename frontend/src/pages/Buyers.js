@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import { buyersAPI } from '../services/api';
 
-// Animations
+// Animations (unchanged)
 const fadeIn = keyframes`
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -25,7 +25,7 @@ const bounce = keyframes`
   60% {transform: translateY(-4px);}
 `;
 
-// Styled Components
+// Styled Components (unchanged except for table column adjustments)
 const PageContainer = styled.div`
   padding: 2rem;
   animation: ${fadeIn} 0.5s ease-out;
@@ -174,16 +174,22 @@ const StyledTable = styled.table`
     color: #2c3e50;
   }
   
+  /* Make S.No column narrower */
+  th:first-child, td:first-child {
+    width: 60px;
+    text-align: center;
+  }
+  
   @media (max-width: 992px) {
-    th:nth-child(3),
-    td:nth-child(3) {
+    th:nth-child(4),
+    td:nth-child(4) {
       display: none;
     }
   }
   
   @media (max-width: 768px) {
-    th:nth-child(4),
-    td:nth-child(4) {
+    th:nth-child(5),
+    td:nth-child(5) {
       display: none;
     }
   }
@@ -408,10 +414,7 @@ const Buyers = () => {
   const [formData, setFormData] = useState({
     name: '',
     companyName: '',
-    email: '',
-    phone: '',
     address: ''
-
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -440,8 +443,6 @@ const Buyers = () => {
       setFormData({
         name: buyer.name,
         companyName: buyer.companyName,
-        email: buyer.email,
-        phone: buyer.phone,
         address: buyer.address
       });
     } else {
@@ -449,8 +450,6 @@ const Buyers = () => {
       setFormData({
         name: '',
         companyName: '',
-        email: '',
-        phone: '',
         address: ''
       });
     }
@@ -544,26 +543,23 @@ const Buyers = () => {
             <i className="bi bi-people"></i>
             <h3>No Buyers Found</h3>
             <p>Get started by adding your first buyer.</p>
-            {/* <ActionButton onClick={() => handleShowModal()}>
-              <i className="bi bi-plus-circle"></i>
-              Add Buyer
-            </ActionButton> */}
           </EmptyState>
         ) : (
           <StyledTable>
             <thead>
               <tr>
+                <th>S.No</th> {/* Added Serial Number column */}
                 <th>Name</th>
                 <th>Company Name</th>
-                <th>Email</th>
-                <th>Phone</th>
+                {/* Removed Email and Phone columns */}
                 <th>Address</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {buyers.map(buyer => (
+              {buyers.map((buyer, index) => (
                 <tr key={buyer._id}>
+                  <td>{index + 1}</td> {/* Serial Number */}
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <div style={{
@@ -583,8 +579,7 @@ const Buyers = () => {
                     </div>
                   </td>
                   <td>{buyer.companyName}</td>
-                  <td>{buyer.email}</td>
-                  <td>{buyer.phone}</td>
+                  {/* Removed Email and Phone data cells */}
                   <td>{buyer.address}</td>
                   <ActionCell>
                     <IconButton 
@@ -642,27 +637,7 @@ const Buyers = () => {
                     placeholder="Enter company name"
                   />
                 </FormGroup>
-                <FormGroup>
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    placeholder="Enter email address"
-                  />
-                </FormGroup>
-                <FormGroup>
-                  <Label>Phone *</Label>
-                  <Input
-                    type="text"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="Enter phone number"
-                  />
-                </FormGroup>
+                {/* Removed Email and Phone fields from modal */}
                 <FormGroup>
                   <Label>Address *</Label>
                   <TextArea

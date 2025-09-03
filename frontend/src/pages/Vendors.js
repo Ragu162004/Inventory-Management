@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import { vendorsAPI } from '../services/api';
 
-// Animations
+// Animations (unchanged)
 const fadeIn = keyframes`
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -19,7 +19,7 @@ const pulse = keyframes`
   100% { transform: scale(1); }
 `;
 
-// Styled Components
+// Styled Components (unchanged except for table column adjustments)
 const PageContainer = styled.div`
   padding: 2rem;
   animation: ${fadeIn} 0.5s ease-out;
@@ -110,7 +110,7 @@ const TableContainer = styled.div`
 const StyledTable = styled.table`
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;  /* ✅ Equal column widths */
+  table-layout: fixed;
 
   thead {
     background: linear-gradient(to right, #3498db);
@@ -119,17 +119,24 @@ const StyledTable = styled.table`
 
   th, td {
     padding: 1rem;
-    text-align: center;   /* ✅ Center aligned */
+    text-align: center;
     vertical-align: middle;
     word-wrap: break-word;
   }
 
+  /* Adjust column widths for 7 columns instead of 8 */
   th, td {
-    width: calc(100% / 8);  /* ✅ Divide equally for 8 columns */
+    width: calc(100% / 7);
   }
 
+  /* Make S.No column narrower */
+  th:first-child, td:first-child {
+    width: 60px;
+  }
+
+  /* Make Actions column slightly wider */
   th:last-child, td:last-child {
-    width: 140px; /* ✅ Extra space for Actions column */
+    width: 140px;
   }
 
   tbody tr {
@@ -144,7 +151,7 @@ const StyledTable = styled.table`
 
 const ActionCell = styled.td`
   display: flex;
-  justify-content: center; /* ✅ Keep buttons centered */
+  justify-content: center;
   gap: 0.5rem;
 `;
 
@@ -299,22 +306,24 @@ const Vendors = () => {
         <StyledTable>
           <thead>
             <tr>
+              <th>S.No</th> {/* Added Serial Number column */}
               <th>Name</th>
               <th>Contact Person</th>
-              <th>Email</th>
+              {/* Removed Email column */}
               <th>Phone</th>
               <th>Address</th>
-              <th>GSTno</th>
-              <th>Account no</th>
+              <th>GST No</th>
+              <th>Account No</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {vendors.map(v => (
+            {vendors.map((v, index) => (
               <tr key={v._id}>
+                <td>{index + 1}</td> {/* Added Serial Number */}
                 <td>{v.name}</td>
                 <td>{v.contactPerson}</td>
-                <td>{v.email}</td>
+                {/* Removed Email column data */}
                 <td>{v.phone}</td>
                 <td>{v.address}</td>
                 <td>{v.gstNo}</td>
@@ -340,7 +349,7 @@ const Vendors = () => {
               <ModalBody>
                 <Input placeholder="Name" name="name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
                 <Input placeholder="Contact Person" name="contactPerson" value={formData.contactPerson} onChange={e => setFormData({...formData, contactPerson: e.target.value})} required />
-                <Input type="email" placeholder="Email" name="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                {/* Email field removed from modal as well */}
                 <Input placeholder="Phone" name="phone" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} required />
                 <TextArea placeholder="Address" name="address" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} required />
                 <Input placeholder="GST No" name="gstNo" value={formData.gstNo} onChange={e => setFormData({...formData, gstNo: e.target.value})} required />
