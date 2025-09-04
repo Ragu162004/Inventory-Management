@@ -1,10 +1,11 @@
 const Sale = require('../models/Sale');
 const Product = require('../models/Product');
-const ProductItem = require('../models/ProductItem');
 
 // Get all sales
 exports.getAllSales = async (req, res) => {
   try {
+    console.log("Get all sales called");
+    
     const sales = await Sale.find()
       .populate('buyer', 'name phone')
       .populate('items.product', 'name category')
@@ -19,10 +20,10 @@ exports.getAllSales = async (req, res) => {
 // Get sale by ID
 exports.getSaleById = async (req, res) => {
   try {
+    console.log("get the sale by id");
     const sale = await Sale.findById(req.params.id)
       .populate('buyer', 'name phone email address')
       .populate('items.product', 'name description category barcode');
-    
     if (!sale) {
       return res.status(404).json({ message: 'Sale not found' });
     }
@@ -32,13 +33,13 @@ exports.getSaleById = async (req, res) => {
       ...sale.toObject(),
       items: sale.items.map(item => ({
         ...item,
-        barcode: item.barcode || item.product.barcode // Ensure barcode is available
+        barcode: item.barcode || item.product.barcode 
       })),
       subtotalAmount: sale.subtotal || sale.totalAmount,
-      discountAmount: sale.discountAmount || 0,
-      taxAmount: sale.taxAmount || 0,
-      shippingAmount: sale.shipping || 0,
-      otherAmount: sale.other || 0
+      discountAmount: sale.discountAmount,
+      taxAmount: sale.taxAmount,
+      shippingAmount: sale.shipping,
+      otherAmount: sale.other
     };
     
     res.json(formattedSale);
@@ -161,7 +162,7 @@ exports.scanBarcode = async (req, res) => {
         barcode: product.barcode
       },
       price: product.price,
-      barcode: product.barcode
+      barcode: product.barcode,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

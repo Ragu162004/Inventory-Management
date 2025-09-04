@@ -5,8 +5,6 @@ import './App.css';
 
 import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
-import Footer from './components/Layout/Footer';
-
 import Dashboard from './pages/Dashboard';
 import Vendors from './pages/Vendors';
 import Buyers from './pages/Buyers';
