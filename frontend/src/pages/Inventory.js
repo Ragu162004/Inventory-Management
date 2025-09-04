@@ -569,10 +569,10 @@ const Inventory = () => {
             <i className="bi bi-box"></i>
             <h3>No Products Found</h3>
             <p>Get started by adding your first product.</p>
-            <ActionButton>
+            {/* <ActionButton>
               <i className="bi bi-plus-circle"></i>
               Add Product
-            </ActionButton>
+            </ActionButton> */}
           </EmptyState>
         )}
       </TableContainer>
