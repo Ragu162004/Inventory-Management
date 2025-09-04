@@ -610,6 +610,101 @@ const ClosePreviewButton = styled.button`
   }
 `;
 
+// Custom checkbox styling
+const Checkbox = styled.input.attrs({ type: 'checkbox' })`
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3498db;
+  position: relative;
+  border-radius: 4px;
+  
+  &:checked {
+    background-color: #3498db;
+  }
+  
+  &:hover {
+    transform: scale(1.1);
+  }
+`;
+
+// Batch actions styling
+const BatchActionsContainer = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  background: rgba(52, 152, 219, 0.1);
+  padding: 1rem;
+  border-radius: 8px;
+  align-items: center;
+  animation: ${slideIn} 0.3s ease-out;
+`;
+
+const BatchActionButton = styled(ActionButton)`
+  ${props => props.variant === 'download' && css`
+    background: linear-gradient(to right, #27ae60, #2ecc71);
+    box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+    
+    &:hover {
+      box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
+    }
+  `}
+  
+  ${props => props.variant === 'delete' && css`
+    background: linear-gradient(to right, #e74c3c, #c0392b);
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+    
+    &:hover {
+      box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+    }
+  `}
+`;
+
+const SelectionCounter = styled.span`
+  color: #2c3e50;
+  font-weight: 500;
+  animation: ${pulse} 1s;
+`;
+
+// Barcode search input styling
+const BarcodeSearchContainer = styled.div`
+  position: relative;
+  min-width: 250px;
+`;
+
+const BarcodeSearchInput = styled(Input)`
+  padding-left: 2.5rem;
+  background-color: #f8f9fa;
+  border: 2px solid #f1f2f6;
+  transition: all 0.3s ease;
+  
+  &:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+  }
+`;
+
+const SearchIcon = styled.i`
+  position: absolute;
+  left: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #3498db;
+`;
+
+const ClearIcon = styled.i`
+  position: absolute;
+  right: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #7f8c8d;
+  cursor: pointer;
+  
+  &:hover {
+    color: #e74c3c;
+  }
+`;
+
 const Products = () => {
   const [products, setProducts] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -630,11 +725,23 @@ const Products = () => {
   const [loading, setLoading] = useState(true);
   const [vendors, setVendors] = useState([]);
   const [imagePreview, setImagePreview] = useState(null);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
+  const [barcodeFilter, setBarcodeFilter] = useState('');
 
   useEffect(() => {
     fetchProducts();
     fetchVendors();
   }, []);
+
+  // Effect to handle select all checkbox state
+  useEffect(() => {
+    if (selectAll) {
+      setSelectedProducts(products.map(product => product._id));
+    } else {
+      setSelectedProducts([]);
+    }
+  }, [selectAll, products]);
 
   const fetchProducts = async () => {
     try {
@@ -814,6 +921,102 @@ const Products = () => {
     setImagePreview(null);
   };
 
+  // Handle individual checkbox selection
+  const handleSelectProduct = (productId) => {
+    setSelectedProducts(prev => {
+      if (prev.includes(productId)) {
+        // If already selected, remove it
+        const newSelected = prev.filter(id => id !== productId);
+        // Update selectAll state
+        if (newSelected.length === 0) {
+          setSelectAll(false);
+        }
+        return newSelected;
+      } else {
+        // If not selected, add it
+        const newSelected = [...prev, productId];
+        // Check if all products are now selected
+        if (newSelected.length === products.length) {
+          setSelectAll(true);
+        }
+        return newSelected;
+      }
+    });
+  };
+
+  // Handle select all checkbox
+  const handleSelectAll = () => {
+    setSelectAll(!selectAll);
+  };
+
+  // Handle batch delete of selected products
+  const handleBatchDelete = async () => {
+    if (selectedProducts.length === 0) {
+      setError('No products selected for deletion');
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to delete ${selectedProducts.length} selected products?`)) {
+      try {
+        // Perform multiple delete operations
+        const promises = selectedProducts.map(id => productsAPI.delete(id));
+        await Promise.all(promises);
+        
+        setSuccess(`${selectedProducts.length} products deleted successfully!`);
+        setSelectedProducts([]);
+        setSelectAll(false);
+        fetchProducts();
+      } catch (error) {
+        setError('Failed to delete selected products. Please try again.');
+      }
+    }
+  };
+
+  // Handle batch barcode download
+  const handleBatchBarcodeDownload = async () => {
+    if (selectedProducts.length === 0) {
+      setError('No products selected for barcode download');
+      return;
+    }
+
+    try {
+      // Filter products that have barcodes
+      const productsWithBarcodes = products.filter(
+        product => selectedProducts.includes(product._id) && product.barcode
+      );
+      
+      if (productsWithBarcodes.length === 0) {
+        setError('None of the selected products have barcodes');
+        return;
+      }
+
+      // Download barcodes one by one
+      for (const product of productsWithBarcodes) {
+        await downloadBarcode(product.barcode, product.name);
+      }
+      
+      setSuccess(`Downloaded ${productsWithBarcodes.length} barcodes successfully!`);
+    } catch (error) {
+      setError('Failed to download barcodes. Please try again.');
+    }
+  };
+  
+  // Filter products by barcode or product name
+  const filterProductsByBarcode = () => {
+    if (!barcodeFilter) return products;
+    
+    const searchTerm = barcodeFilter.toLowerCase();
+    return products.filter(product => 
+      (product.barcode && product.barcode.toLowerCase().includes(searchTerm)) ||
+      (product.name && product.name.toLowerCase().includes(searchTerm))
+    );
+  };
+
+  // Handle barcode scan (can be connected to a real scanner via input event)
+  const handleBarcodeInput = (e) => {
+    setBarcodeFilter(e.target.value);
+  };
+
   const ProductImage = ({ product }) => {
     if (product.image) {
       return (
@@ -853,10 +1056,8 @@ const Products = () => {
   const downloadBarcode = async (barcode, productName) => {
     if (!barcode) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/barcode/${barcode}/barcode-image`);
-      if (!response.ok) throw new Error('Failed to fetch barcode image');
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const response = await productsAPI.getBarcodeImage(barcode);
+      const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
       link.download = `barcode-${barcode}-${productName.replace(/\s+/g, '-')}.png`;
@@ -881,10 +1082,28 @@ const Products = () => {
     <PageContainer>
       <PageHeader>
         <PageTitle>Products Management</PageTitle>
-        <ActionButton onClick={() => handleShowModal()}>
-          <i className="bi bi-plus-circle"></i>
-          Add New Product
-        </ActionButton>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Barcode scanner/filter input */}
+          <BarcodeSearchContainer>
+            <BarcodeSearchInput
+              type="text"
+              placeholder="Scan or enter barcode"
+              value={barcodeFilter}
+              onChange={handleBarcodeInput}
+            />
+            <SearchIcon className="bi bi-upc-scan" />
+            {barcodeFilter && (
+              <ClearIcon 
+                className="bi bi-x-circle"
+                onClick={() => setBarcodeFilter('')}
+              />
+            )}
+          </BarcodeSearchContainer>
+          <ActionButton onClick={() => handleShowModal()}>
+            <i className="bi bi-plus-circle"></i>
+            Add New Product
+          </ActionButton>
+        </div>
       </PageHeader>
 
       {error && (
@@ -907,12 +1126,41 @@ const Products = () => {
         </AlertMessage>
       )}
 
+      {/* Batch Action Buttons - Only shown when products are selected */}
+      {selectedProducts.length > 0 && (
+        <BatchActionsContainer>
+          <SelectionCounter>
+            {selectedProducts.length} product{selectedProducts.length > 1 ? 's' : ''} selected
+          </SelectionCounter>
+          <BatchActionButton 
+            variant="download"
+            onClick={handleBatchBarcodeDownload}
+          >
+            <i className="bi bi-upc"></i>
+            Download Barcodes
+          </BatchActionButton>
+          <BatchActionButton 
+            variant="delete"
+            onClick={handleBatchDelete}
+          >
+            <i className="bi bi-trash"></i>
+            Delete Selected
+          </BatchActionButton>
+        </BatchActionsContainer>
+      )}
+
       <TableContainer>
         {products.length > 0 ? (
           <StyledTable>
             <thead>
               <tr>
-                <th>S.No</th> {/* Added Serial Number column */}
+                <th style={{ width: '40px', textAlign: 'center' }}>
+                  <Checkbox 
+                    checked={selectAll}
+                    onChange={handleSelectAll}
+                  />
+                </th>
+                <th>S.No</th>
                 <th>Product</th>
                 <th>Barcode</th>
                 <th>Category</th>
@@ -924,64 +1172,88 @@ const Products = () => {
               </tr>
             </thead>
             <tbody>
-              {products.map((product, index) => (
-                <tr key={product._id}>
-                  <td>{index + 1}</td> {/* Serial Number */}
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <ProductImage product={product} />
-                      {product.name}
-                    </div>
-                  </td>
-                  <td>{product.barcode || '-'}</td>
-                  <td>{product.category}</td>
-                  <td>{formatCurrency(product.price)}</td>
-                  <td>{product.minquantity}</td>
-                  <td>
-                    <StockIndicator>
-                      <span>{product.quantity}</span>
-                      <ProgressBar>
-                        <ProgressFill 
-                          current={product.quantity} 
-                          max={Math.max(product.quantity * 2, 100)} 
-                        />
-                      </ProgressBar>
-                    </StockIndicator>
-                  </td>
-                  <td>
-                    <StatusBadge variant={getStockStatus(product.quantity, product.minquantity)}>
-                      {getStockStatusText(product.quantity, product.minquantity)}
-                    </StatusBadge>
-                  </td>
-                  <ActionCell>
-                    <IconButton 
-                      variant="edit" 
-                      onClick={() => handleShowModal(product)}
-                      title="Edit Product"
-                    >
-                      <i className="bi bi-pencil"></i>
-                    </IconButton>
-                    <IconButton 
-                      variant="danger" 
-                      onClick={() => handleDelete(product._id)}
-                      title="Delete Product"
-                    >
-                      <i className="bi bi-trash"></i>
-                    </IconButton>
-                    {product.barcode ? (
-                      <DownloadButton
-                        href="#"
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          await downloadBarcode(product.barcode, product.name);
-                        }}
+              {filterProductsByBarcode().length > 0 ? (
+                filterProductsByBarcode().map((product, index) => (
+                  <tr key={product._id}>
+                    <td style={{ textAlign: 'center' }}>
+                      <Checkbox 
+                        checked={selectedProducts.includes(product._id)}
+                        onChange={() => handleSelectProduct(product._id)}
+                      />
+                    </td>
+                    <td>{index + 1}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <ProductImage product={product} />
+                        {product.name}
+                      </div>
+                    </td>
+                    <td>{product.barcode || '-'}</td>
+                    <td>{product.category}</td>
+                    <td>{formatCurrency(product.price)}</td>
+                    <td>{product.minquantity}</td>
+                    <td>
+                      <StockIndicator>
+                        <span>{product.quantity}</span>
+                        <ProgressBar>
+                          <ProgressFill 
+                            current={product.quantity} 
+                            max={Math.max(product.quantity * 2, 100)} 
+                          />
+                        </ProgressBar>
+                      </StockIndicator>
+                    </td>
+                    <td>
+                      <StatusBadge variant={getStockStatus(product.quantity, product.minquantity)}>
+                        {getStockStatusText(product.quantity, product.minquantity)}
+                      </StatusBadge>
+                    </td>
+                    <ActionCell>
+                      <IconButton 
+                        variant="edit" 
+                        onClick={() => handleShowModal(product)}
+                        title="Edit Product"
                       >
-                        <i className="bi bi-download"></i>
-                      </DownloadButton>
-                    ) : '-'}
-                  </ActionCell>
+                        <i className="bi bi-pencil"></i>
+                      </IconButton>
+                      <IconButton 
+                        variant="danger" 
+                        onClick={() => handleDelete(product._id)}
+                        title="Delete Product"
+                      >
+                        <i className="bi bi-trash"></i>
+                      </IconButton>
+                      {product.barcode ? (
+                        <DownloadButton
+                          href="#"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            await downloadBarcode(product.barcode, product.name);
+                          }}
+                        >
+                          <i className="bi bi-download"></i>
+                        </DownloadButton>
+                      ) : '-'}
+                    </ActionCell>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="10">
+                    <EmptyState>
+                      <i className="bi bi-search"></i>
+                      <h3>No products found with barcode "{barcodeFilter}"</h3>
+                      <p>Try a different barcode or clear the search filter.</p>
+                      <SecondaryButton 
+                        onClick={() => setBarcodeFilter('')}
+                        style={{ marginTop: '1rem' }}
+                      >
+                        Clear Filter
+                      </SecondaryButton>
+                    </EmptyState>
+                  </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </StyledTable>
         ) : (
