@@ -2063,7 +2063,7 @@ const Sales = () => {
                       month: 'long',
                       day: 'numeric'
                     })}</p>
-                    <p><strong>Time:</strong> {new Date(invoiceData.saleDate).toLocaleTimeString()}</p>
+                    <p><strong>Time:</strong> {invoiceData.createdAt ? new Date(invoiceData.createdAt).toLocaleTimeString() : new Date().toLocaleTimeString()}</p>
                   </InvoiceSection>
 
                   <InvoiceSection>
@@ -2157,7 +2157,16 @@ const Sales = () => {
 
                 <InvoiceFooter>
                   <p><strong>Thank you for purchasing!</strong></p>
-                  <p>Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}</p>
+                  <p>Generated on {new Date().toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long', 
+                    day: 'numeric'
+                  })} at {new Date().toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                  })}</p>
                 </InvoiceFooter>
               </InvoiceContainer>
             )}
