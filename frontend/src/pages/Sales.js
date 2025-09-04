@@ -679,7 +679,7 @@ const Sales = () => {
         stopScanner();
         setTimeout(() => {
           startScanner();
-        }, 500); // short delay to allow camera to reset
+        }, 2000); // short delay to allow camera to reset
       } catch (error) {
         setError(`Invalid or sold barcode: ${scannedCode}`);
         setScannedCode(""); // Clear the code after error
