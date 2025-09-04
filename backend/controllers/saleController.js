@@ -40,6 +40,9 @@ exports.getSaleById = async (req, res) => {
       shippingAmount: sale.shipping,
       otherAmount: sale.other
     };
+
+    console.log("called", formattedSale.items);
+    
     
     res.json(formattedSale);
   } catch (error) {
