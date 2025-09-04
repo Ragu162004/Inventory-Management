@@ -20,7 +20,6 @@ exports.getAllSales = async (req, res) => {
 // Get sale by ID
 exports.getSaleById = async (req, res) => {
   try {
-    console.log("get the sale by id");
     const sale = await Sale.findById(req.params.id)
       .populate('buyer', 'name phone email address')
       .populate('items.product', 'name description category barcode');
