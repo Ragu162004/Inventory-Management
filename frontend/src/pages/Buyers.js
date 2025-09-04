@@ -414,6 +414,8 @@ const Buyers = () => {
   const [formData, setFormData] = useState({
     name: '',
     companyName: '',
+    email: '',
+    phone: '',
     address: ''
   });
   const [error, setError] = useState('');
@@ -428,7 +430,7 @@ const Buyers = () => {
     try {
       setLoading(true);
       const response = await buyersAPI.getAll();
-      setBuyers(response.data);
+  setBuyers(response.data);
       setError('');
     } catch (error) {
       setError('Failed to fetch buyers. Please try again.');
@@ -443,6 +445,8 @@ const Buyers = () => {
       setFormData({
         name: buyer.name,
         companyName: buyer.companyName,
+        email: buyer.email || '',
+        phone: buyer.phone || '',
         address: buyer.address
       });
     } else {
@@ -450,6 +454,8 @@ const Buyers = () => {
       setFormData({
         name: '',
         companyName: '',
+        email: '',
+        phone: '',
         address: ''
       });
     }
@@ -548,10 +554,11 @@ const Buyers = () => {
           <StyledTable>
             <thead>
               <tr>
-                <th>S.No</th> {/* Added Serial Number column */}
+                <th>S.No</th>
                 <th>Name</th>
                 <th>Company Name</th>
-                {/* Removed Email and Phone columns */}
+                <th>Email</th>
+                <th>Phone</th>
                 <th>Address</th>
                 <th>Actions</th>
               </tr>
@@ -559,7 +566,7 @@ const Buyers = () => {
             <tbody>
               {buyers.map((buyer, index) => (
                 <tr key={buyer._id}>
-                  <td>{index + 1}</td> {/* Serial Number */}
+                  <td>{index + 1}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <div style={{
@@ -579,7 +586,8 @@ const Buyers = () => {
                     </div>
                   </td>
                   <td>{buyer.companyName}</td>
-                  {/* Removed Email and Phone data cells */}
+                  <td>{buyer.email || '-'}</td>
+                  <td>{buyer.phone || '-'}</td>
                   <td>{buyer.address}</td>
                   <ActionCell>
                     <IconButton 
@@ -637,7 +645,26 @@ const Buyers = () => {
                     placeholder="Enter company name"
                   />
                 </FormGroup>
-                {/* Removed Email and Phone fields from modal */}
+                <FormGroup>
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="Enter email address"
+                  />
+                </FormGroup>
+                <FormGroup>
+                  <Label>Phone</Label>
+                  <Input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    placeholder="Enter phone number"
+                  />
+                </FormGroup>
                 <FormGroup>
                   <Label>Address *</Label>
                   <TextArea
