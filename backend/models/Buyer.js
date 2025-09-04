@@ -13,11 +13,11 @@ const buyerSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    trim: true
+    trim: false
   },
   phone: {
     type: String,
-    required: true,
+    required: false,
     trim: true
   },
   address: {
