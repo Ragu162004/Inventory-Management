@@ -1,5 +1,5 @@
 import axios from 'axios';
-
+//base
 const API_BASE_URL = "https://inventory-management-yexl.onrender.com/api";
 
 const api = axios.create({
