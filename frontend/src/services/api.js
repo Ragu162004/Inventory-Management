@@ -32,6 +32,11 @@ export const productsAPI = {
   getAll: () => api.get('/products'),
   getLowStock: () => api.get('/products/low-stock'),
   getById: (id) => api.get(`/products/${id}`),
+  getByBarcode: (barcode) => api.get(`/products/barcode/${barcode}`),
+  getBarcodeImage: (barcode) => api.get(`/barcode/${barcode}/barcode-image`, {
+    responseType: 'blob'
+  }),
+  filterByBarcode: (barcode) => api.get(`/products/barcode/${barcode}`),
   create: (data) => {
     // Create FormData for file upload
     const formData = new FormData();
