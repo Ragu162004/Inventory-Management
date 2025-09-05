@@ -1,7 +1,7 @@
 import axios from 'axios';
 //base
 const API_BASE_URL = "https://inventory-management-yexl.onrender.com/api";
-// const API_BASE_URL = "http://localhost:5000/api";
+//  const API_BASE_URL = "http://localhost:5000/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -92,6 +92,7 @@ export const salesAPI = {
   update: (id, data) => api.put(`/sales/${id}`, data),
   delete: (id) => api.delete(`/sales/${id}`),
   scanBarcode: (data) => api.post('/sales/scan', data),
+  authenticateEdit: (password) => api.post('/sales/authenticate-edit', { password }),
   getInvoice: (id) => api.get(`/sales/${id}/invoice`, { responseType: 'blob' }),
 };
 

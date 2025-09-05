@@ -10,12 +10,7 @@ exports.updateSale = async (req, res) => {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
-    // Restore product quantities from previous sale items
-    for (const prevItem of sale.items) {
-      await Product.findByIdAndUpdate(prevItem.product, { $inc: { quantity: prevItem.quantity } });
-    }
-
-    // Prepare new sale items and update product quantities and prices
+    // Only update sale record, do not change product stock
     const productMap = new Map();
     for (const item of items) {
       const key = item.product;
@@ -38,26 +33,31 @@ exports.updateSale = async (req, res) => {
       if (!product) {
         return res.status(400).json({ message: `Product with id ${productId} not found` });
       }
-      if (product.quantity < item.quantity) {
-        return res.status(400).json({ message: `Product ${product.name} does not have enough stock` });
-      }
-      // If price is changed, update product price
-      let usedPrice = product.price;
-      if (item.unitPrice && item.unitPrice !== product.price) {
-        usedPrice = item.unitPrice;
-        await Product.findByIdAndUpdate(product._id, { price: usedPrice });
-      }
-      const itemTotal = usedPrice * item.quantity;
-      totalAmount += itemTotal;
-      saleItems.push({
-        product: product._id,
-        quantity: item.quantity,
-        unitPrice: usedPrice,
-        total: itemTotal,
-        barcode: product.barcode
-      });
-      // Deduct new quantity
-      await Product.findByIdAndUpdate(product._id, { $inc: { quantity: -item.quantity } });
+        // Calculate available stock after restoring previous sale quantities
+        const prevItem = sale.items.find(i => i.product.toString() === productId);
+        const prevQty = prevItem ? prevItem.quantity : 0;
+        const availableStock = product.quantity + prevQty;
+        if (item.quantity > availableStock) {
+          return res.status(400).json({ message: `Product ${product.name} does not have enough stock. Available: ${availableStock}` });
+        }
+        // If price is changed, update product price
+        let usedPrice = product.price;
+        if (item.unitPrice && item.unitPrice !== product.price) {
+          usedPrice = item.unitPrice;
+          await Product.findByIdAndUpdate(product._id, { price: usedPrice });
+        }
+        const itemTotal = usedPrice * item.quantity;
+        totalAmount += itemTotal;
+        saleItems.push({
+          product: product._id,
+          quantity: item.quantity,
+          unitPrice: usedPrice,
+          total: itemTotal,
+          barcode: product.barcode
+        });
+    // Deduct new quantity, but never allow stock to go negative
+    const newStock = availableStock - item.quantity;
+    await Product.findByIdAndUpdate(product._id, { quantity: Math.max(newStock, 0) });
     }
 
     // Update sale fields
