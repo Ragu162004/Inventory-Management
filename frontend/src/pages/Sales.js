@@ -1955,7 +1955,8 @@ const Sales = () => {
                       const productDescription = product.description || item.productData?.description || '';
                       const unitPrice = item.unitPrice || product.price || item.productData?.price || 0;
                       const barcode = item.barcode || product.barcode || 'N/A';
-
+                      const quantity = item.quantity || 1;
+                      const itemTotal = unitPrice * quantity;
                       return (
                         <tr key={item._id || idx}>
                           <td>{idx + 1}</td>
@@ -1976,12 +1977,8 @@ const Sales = () => {
                           <td>{productCategory}</td>
                           <td><BarcodeBadge>{barcode}</BarcodeBadge></td>
                           <td>₹{unitPrice.toFixed(2)}</td>
-                          <td>{( (selectedSale.subtotal ?? selectedSale.subtotalAmount ?? selectedSale.totalAmount) / unitPrice ).toFixed(0)}</td>
-                          <td>
-                              ₹{(
-                                ((selectedSale.subtotal ?? selectedSale.subtotalAmount ?? selectedSale.totalAmount))
-                              ).toFixed(2)}
-                            </td>
+                          <td>{quantity}</td>
+                          <td>₹{itemTotal.toFixed(2)}</td>
                         </tr>
                       );
                     })}
@@ -2096,7 +2093,8 @@ const Sales = () => {
                       const productCategory = product.category || item.productData?.category || 'N/A';
                       const unitPrice = item.unitPrice || product.price || item.productData?.price || 0;
                       const barcode = item.barcode || product.barcode || 'N/A';
-                      
+                      const quantity = item.quantity || 1;
+                      const itemTotal = unitPrice * quantity;
                       return (
                         <tr key={item._id || idx}>
                           <td>{idx + 1}</td>
@@ -2104,12 +2102,8 @@ const Sales = () => {
                           <td>{productCategory}</td>
                           <td>{barcode}</td>
                           <td>₹{unitPrice.toFixed(2)}</td>
-                          <td>{( (invoiceData.subtotal ?? invoiceData.subtotalAmount ?? invoiceData.totalAmount) / unitPrice ).toFixed(0)}</td>
-                          <td>
-                              ₹{(
-                                ((invoiceData.subtotal ?? invoiceData.subtotalAmount ?? invoiceData.totalAmount))
-                              ).toFixed(2)}
-                            </td>
+                          <td>{quantity}</td>
+                          <td>₹{itemTotal.toFixed(2)}</td>
                         </tr>
                       );
                     })}
