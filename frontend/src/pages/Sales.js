@@ -148,6 +148,49 @@ const Container = styled.div`
   min-height: 100vh;
 `;
 
+const FixedAlertContainer = styled.div`
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  min-width: 400px;
+  max-width: 80vw;
+  animation: ${fadeIn} 0.3s ease-out;
+  
+  .alert {
+    margin-bottom: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    border: none;
+    border-radius: 10px;
+    font-weight: 500;
+    
+    &.alert-success {
+      background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+      border-left: 4px solid #28a745;
+      color: #155724;
+    }
+    
+    &.alert-danger {
+      background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+      border-left: 4px solid #dc3545;
+      color: #721c24;
+    }
+    
+    &.alert-warning {
+      background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+      border-left: 4px solid #ffc107;
+      color: #856404;
+    }
+    
+    &.alert-info {
+      background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+      border-left: 4px solid #17a2b8;
+      color: #0c5460;
+    }
+  }
+`;
+
 const AnimatedContainer = styled.div`
   animation: ${fadeIn} 0.6s ease-out;
 `;
@@ -806,11 +849,15 @@ const Sales = () => {
   const [sales, setSales] = useState([]);
   const [buyers, setBuyers] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteItemIndex, setDeleteItemIndex] = useState(null);
   const [deleteQuantity, setDeleteQuantity] = useState(1);
   const [selectedSale, setSelectedSale] = useState(null);
+  const [editingSale, setEditingSale] = useState(null);
+  const [password, setPassword] = useState("");
   const [scannerActive, setScannerActive] = useState(false);
   const [scannedCode, setScannedCode] = useState("");
   const [error, setError] = useState("");
@@ -820,6 +867,7 @@ const Sales = () => {
   const [products, setProducts] = useState([]);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const scannerRef = useRef(null);
 
@@ -1362,6 +1410,203 @@ const Sales = () => {
     }
   };
 
+  // Edit functionality functions
+  const handleEdit = (sale) => {
+    setEditingSale(sale);
+    setShowPasswordModal(true);
+    setPassword("");
+    setError("");
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!password) {
+      setError("Password is required");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await salesAPI.authenticateEdit(password);
+      
+      if (response.data.success) {
+        setShowPasswordModal(false);
+        setPassword("");
+        setError("");
+        await initializeEditForm(editingSale);
+        setShowEditModal(true);
+        setIsEditMode(true);
+      }
+    } catch (error) {
+      setError(error.response?.data?.message || "Invalid password");
+      // Auto-dismiss error after 3 seconds
+      setTimeout(() => {
+        setError("");
+      }, 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initializeEditForm = async (sale) => {
+    try {
+      // Fetch complete sale data
+      const response = await salesAPI.getById(sale._id);
+      const saleData = response.data;
+      
+      // Enhance items with product details for editing
+      const enhancedItems = await Promise.all(
+        saleData.items.map(async (item) => {
+          try {
+            const product = item.product;
+            return {
+              product: product._id,
+              productData: {
+                name: product.name,
+                category: product.category,
+                description: product.description,
+                currentStock: product.quantity,
+                minStock: product.minquantity
+              },
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              barcode: item.barcode || product.barcode
+            };
+          } catch (error) {
+            console.error("Error enhancing item:", error);
+            return item;
+          }
+        })
+      );
+
+      // Set form data for editing
+      setFormData({
+        buyer: saleData.buyer._id,
+        saleDate: new Date(saleData.saleDate).toISOString().split("T")[0],
+        items: enhancedItems,
+        subtotal: saleData.subtotal || 0,
+        discount: saleData.discount || 0,
+        discountAmount: saleData.discountAmount || 0,
+        tax: saleData.tax || 0,
+        taxAmount: saleData.taxAmount || 0,
+        shipping: saleData.shipping || 0,
+        other: saleData.other || 0,
+        total: saleData.totalAmount || 0,
+        comments: saleData.comments || ""
+      });
+    } catch (error) {
+      setError("Failed to load sale data for editing");
+      console.error("Error initializing edit form:", error);
+    }
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.buyer || formData.items.length === 0) {
+      setError("Buyer and at least one item are required");
+      setTimeout(() => setError(""), 3000);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const formattedData = {
+        ...formData,
+        items: formData.items.map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          barcode: item.barcode
+        }))
+      };
+      
+      await salesAPI.update(editingSale._id, formattedData);
+      setSuccess("Sale updated successfully");
+      setTimeout(() => setSuccess(""), 3000);
+      fetchSales();
+      handleCloseEditModal();
+    } catch (error) {
+      setError(error.response?.data?.message || "Failed to update sale");
+      setTimeout(() => setError(""), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setIsEditMode(false);
+    setEditingSale(null);
+    stopScanner();
+    setError("");
+  };
+
+  const handleClosePasswordModal = () => {
+    setShowPasswordModal(false);
+    setPassword("");
+    setEditingSale(null);
+    setError("");
+  };
+
+  const addManualProduct = () => {
+    const newItem = {
+      product: "",
+      productData: {
+        name: "",
+        category: "",
+        description: "",
+        currentStock: 0,
+        minStock: 0
+      },
+      quantity: 1,
+      unitPrice: 0,
+      barcode: ""
+    };
+    
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, newItem]
+    }));
+  };
+
+  const updateManualItem = (index, field, value) => {
+    setFormData(prev => {
+      const newItems = [...prev.items];
+      
+      if (field.startsWith('productData.')) {
+        const productField = field.split('.')[1];
+        newItems[index] = {
+          ...newItems[index],
+          productData: {
+            ...newItems[index].productData,
+            [productField]: value
+          }
+        };
+      } else {
+        newItems[index] = {
+          ...newItems[index],
+          [field]: value
+        };
+      }
+      
+      return calculateTotals({
+        ...prev,
+        items: newItems
+      });
+    });
+  };
+
+  const removeManualItem = (index) => {
+    setFormData(prev => {
+      const newItems = prev.items.filter((_, i) => i !== index);
+      return calculateTotals({
+        ...prev,
+        items: newItems
+      });
+    });
+  };
+
   const handleView = async (sale) => {
     try {
       setLoading(true);
@@ -1539,6 +1784,27 @@ const Sales = () => {
   return (
     <Container>
       <PrintStyles />
+      
+      {/* Fixed Alert Container */}
+      <FixedAlertContainer>
+        {success && (
+          <Alert variant="success" className="alert-success">
+            <strong>✅ Success!</strong> {success}
+          </Alert>
+        )}
+        {error && (
+          <Alert variant="danger" className="alert-danger">
+            <strong>❌ Error!</strong> {error}
+          </Alert>
+        )}
+        {lowStockAlert && (
+          <Alert variant="warning" className="alert-warning">
+            <strong>⚠️ Low Stock Alert!</strong> {lowStockAlert.productName} has reached the minimum stock level.
+            <div><small>Current stock: {lowStockAlert.currentStock}, Minimum: {lowStockAlert.minStock}</small></div>
+          </Alert>
+        )}
+      </FixedAlertContainer>
+      
       <AnimatedContainer>
         <HeaderSection>
           <Row className="">
@@ -1562,8 +1828,6 @@ const Sales = () => {
             </Col>
           </Row>
         </HeaderSection>
-
-        {success && <Alert variant="success">{success}</Alert>}
 
         <StyledTable responsive hover>
           <thead>
@@ -1601,6 +1865,15 @@ const Sales = () => {
                     disabled={loading}
                   >
                     👁️ View
+                  </SecondaryButton>
+                  <SecondaryButton 
+                    size="sm" 
+                    className="me-2" 
+                    onClick={() => handleEdit(sale)}
+                    disabled={loading}
+                    style={{ borderColor: '#fd7e14', color: '#fd7e14' }}
+                  >
+                    ✏️ Edit
                   </SecondaryButton>
                   <SuccessButton 
                     size="sm"
@@ -1661,27 +1934,6 @@ const Sales = () => {
                 <ScannerStatus $active={scannerActive} className="mb-2">
                   {scannerActive ? '🟢 Scanner Active' : '🔴 Scanner Inactive'}
                 </ScannerStatus>
-
-                {error && (
-                  <Alert 
-                    variant="danger" 
-                    className="py-2 mb-2"
-                  >
-                    {error}
-                  </Alert>
-                )}
-                
-                {lowStockAlert && (
-                  <LowStockAlert className="py-2 mb-2">
-                    <div className="d-flex align-items-center">
-                      <span className="me-2">⚠️</span>
-                      <div>
-                        <strong>Low Stock Alert:</strong> {lowStockAlert.productName} has reached the minimum stock level. 
-                        <div><small>Current stock: {lowStockAlert.currentStock}, Minimum: {lowStockAlert.minStock}</small></div>
-                      </div>
-                    </div>
-                  </LowStockAlert>
-                )}
 
                 <ScannerContainer ref={scannerRef} style={{marginBottom: '0.5rem'}} />
 
@@ -2166,13 +2418,337 @@ const Sales = () => {
             )}
           </Modal.Body>
           <Modal.Footer className="d-print-none">
+
+            <PrimaryButton onClick={handlePrintInvoice} style={{ marginRight: '10px' }}>
+              �️ Print
+            </PrimaryButton>
             <SecondaryButton onClick={() => setShowInvoiceModal(false)}>
               Close
             </SecondaryButton>
-            <PrintButton onClick={handlePrintInvoice}>
-              🖨️ Print Invoice
-            </PrintButton>
           </Modal.Footer>
+        </StyledModal>
+
+        {/* Password Authentication Modal */}
+        <StyledModal
+          show={showPasswordModal}
+          onHide={handleClosePasswordModal}
+          size="sm"
+          centered
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Enter Password</Modal.Title>
+          </Modal.Header>
+          <Form onSubmit={handlePasswordSubmit}>
+            <Modal.Body>
+              <p>Please enter the password to edit this sale:</p>
+              <FormGroup>
+                <Form.Label>Password</Form.Label>
+                <Form.Control
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
+                  required
+                  autoFocus
+                />
+              </FormGroup>
+            </Modal.Body>
+            <Modal.Footer>
+              <SecondaryButton onClick={handleClosePasswordModal}>
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton type="submit" disabled={loading}>
+                {loading ? <LoadingSpinner size="sm" /> : 'Authenticate'}
+              </PrimaryButton>
+            </Modal.Footer>
+          </Form>
+        </StyledModal>
+
+        {/* Edit Sale Modal */}
+        <StyledModal show={showEditModal} onHide={handleCloseEditModal} size="lg" centered>
+          <Modal.Header closeButton>
+            <Modal.Title>Edit Sale</Modal.Title>
+          </Modal.Header>
+          <Form onSubmit={handleEditSubmit}>
+            <Modal.Body className="pb-0">
+              <Row>
+                <Col md={6}>
+                  <FormGroup className="mb-3">
+                    <Form.Label>Buyer</Form.Label>
+                    <Form.Select
+                      name="buyer"
+                      value={formData.buyer}
+                      onChange={(e) => handleInputChange("buyer", e.target.value)}
+                      required
+                    >
+                      <option value="">Select Buyer</option>
+                      {buyers.map((buyer) => (
+                        <option key={buyer._id} value={buyer._id}>
+                          {buyer.name}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </FormGroup>
+                </Col>
+                <Col md={6}>
+                  <FormGroup className="mb-3">
+                    <Form.Label>Sale Date</Form.Label>
+                    <Form.Control
+                      type="date"
+                      name="saleDate"
+                      value={formData.saleDate}
+                      onChange={(e) => handleInputChange("saleDate", e.target.value)}
+                      required
+                    />
+                  </FormGroup>
+                </Col>
+              </Row>
+
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <h5>Scan Items</h5>
+                  <SecondaryButton 
+                    onClick={addManualProduct}
+                    size="sm"
+                  >
+                    + Add Manual Product
+                  </SecondaryButton>
+                </div>
+
+                <ScannerStatus $active={scannerActive} className="mb-2">
+                  {scannerActive ? '🟢 Scanner Active' : '� Scanner Inactive'}
+                </ScannerStatus>
+
+                <ScannerContainer ref={scannerRef} style={{marginBottom: '0.5rem'}} />
+
+                <div className="d-flex gap-2 mb-2">
+                  <ScannerButton
+                    $active={scannerActive}
+                    onClick={scannerActive ? stopScanner : startScanner}
+                  >
+                    {scannerActive ? '⏹️' : '📷'}
+                    {scannerActive ? 'Stop Scanner' : 'Start Scanner'}
+                  </ScannerButton>
+                </div>
+
+                {/* Barcode Input */}
+                <FormGroup className="mb-3">
+                  <Form.Label>Scanned Barcode</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={scannedCode}
+                    onChange={(e) => setScannedCode(e.target.value)}
+                    placeholder="Scan or enter barcode"
+                  />
+                </FormGroup>
+              </div>
+
+              <h6 className="mb-2">Items ({formData.items.length})</h6>
+              
+              <Table bordered responsive className="mb-3">
+                <thead className="bg-light">
+                  <tr>
+                    <th>S.No</th>
+                    <th>Product Name</th>
+                    <th>Category</th>
+                    <th>Barcode</th>
+                    <th>Price (₹)</th>
+                    <th>Qty</th>
+                    <th>Total (₹)</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formData.items.map((item, index) => (
+                    <tr key={index}>
+                      <td>{index + 1}</td>
+                      <td>
+                        {item.productData ? (
+                          <div>
+                            <div style={{ fontWeight: 'bold' }}>{item.productData.name || 'N/A'}</div>
+                            {item.productData.description && (
+                              <small className="text-muted">{item.productData.description.substring(0, 30)}{item.productData.description.length > 30 ? '...' : ''}</small>
+                            )}
+                          </div>
+                        ) : (
+                          <Form.Control
+                            type="text"
+                            size="sm"
+                            placeholder="Product name"
+                            value={item.productData?.name || ''}
+                            onChange={(e) => updateManualItem(index, 'productData.name', e.target.value)}
+                            style={{ minWidth: '120px' }}
+                          />
+                        )}
+                      </td>
+                      <td>
+                        {item.productData && item.productData.name ? (
+                          item.productData.category || 'Unknown'
+                        ) : (
+                          <Form.Control
+                            type="text"
+                            size="sm"
+                            placeholder="Category"
+                            value={item.productData?.category || ''}
+                            onChange={(e) => updateManualItem(index, 'productData.category', e.target.value)}
+                            style={{ minWidth: '100px' }}
+                          />
+                        )}
+                      </td>
+                      <td>
+                        {item.barcode ? (
+                          <BarcodeBadge>{item.barcode}</BarcodeBadge>
+                        ) : (
+                          <Form.Control
+                            type="text"
+                            size="sm"
+                            placeholder="Barcode"
+                            value={item.barcode || ''}
+                            onChange={(e) => updateManualItem(index, 'barcode', e.target.value)}
+                            style={{ minWidth: '100px' }}
+                          />
+                        )}
+                      </td>
+                      <td>
+                        <Form.Control
+                          type="number"
+                          size="sm"
+                          step="0.01"
+                          value={item.unitPrice || 0}
+                          onChange={(e) => updateManualItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                          style={{ minWidth: '80px' }}
+                        />
+                      </td>
+                      <td>
+                        <Form.Control
+                          type="number"
+                          size="sm"
+                          min="1"
+                          value={item.quantity || 1}
+                          onChange={(e) => updateManualItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                          style={{ minWidth: '80px' }}
+                        />
+                      </td>
+                      <td>{(item.unitPrice * item.quantity).toFixed(2)}</td>
+                      <td>
+                        <DangerButton variant="outline-danger" size="sm" onClick={() => removeManualItem(index)}>
+                          Remove
+                        </DangerButton>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan="6" className="text-end"><strong>Subtotal:</strong></td>
+                    <td><strong>₹{formData.subtotal.toFixed(2)}</strong></td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </Table>
+
+              {/* Totals Section */}
+              <div className="mb-3">
+                <h5 className="mb-2">Order Summary</h5>
+                <Row className="g-2">
+                  <Col md={3}>
+                    <div className="total-item p-2 border rounded">
+                      <Form.Label className="mb-1 small">Discount (%)</Form.Label>
+                      <div className="d-flex align-items-center">
+                        <Form.Control
+                          type="number"
+                          className="me-2"
+                          size="sm"
+                          style={{width: '60px'}}
+                          value={formData.discount}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            handleInputChange("discount", isNaN(value) ? 0 : Math.min(100, Math.max(0, value)));
+                          }}
+                        />
+                        <span style={{color: "#28a745", fontSize: "0.9rem"}}>
+                          -₹{formData.discountAmount.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div className="total-item p-2 border rounded">
+                      <Form.Label className="mb-1 small">Tax (%)</Form.Label>
+                      <div className="d-flex align-items-center">
+                        <Form.Control
+                          type="number"
+                          className="me-2"
+                          size="sm"
+                          style={{width: '60px'}}
+                          value={formData.tax}
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            handleInputChange("tax", isNaN(value) ? 0 : value);
+                          }}
+                        />
+                        <span style={{color: "#007bff", fontSize: "0.9rem"}}>
+                          +₹{formData.taxAmount.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div className="total-item p-2 border rounded">
+                      <Form.Label className="mb-1 small">Shipping</Form.Label>
+                      <Form.Control
+                        type="number"
+                        step="0.01"
+                        size="sm"
+                        value={formData.shipping}
+                        onChange={(e) => {
+                          handleInputChange("shipping", Number.parseFloat(e.target.value) || 0);
+                        }}
+                      />
+                    </div>
+                  </Col>
+                  <Col md={3}>
+                    <div className="total-item p-2 border rounded">
+                      <Form.Label className="mb-1 small">Other</Form.Label>
+                      <Form.Control
+                        type="number"
+                        step="0.01"
+                        size="sm"
+                        value={formData.other}
+                        onChange={(e) => {
+                          handleInputChange("other", Number.parseFloat(e.target.value) || 0);
+                        }}
+                      />
+                    </div>
+                  </Col>
+                </Row>
+                
+                <div className="total-final mt-3 p-2 bg-primary text-white rounded text-center">
+                  <h5 className="mb-0">Final Total: ₹{formData.total.toFixed(2)}</h5>
+                </div>
+              </div>
+
+              {/* Comments Section */}
+              <div className="mb-3">
+                <h5 className="mb-2">Comments</h5>
+                <Form.Control
+                  as="textarea"
+                  placeholder="Comments or Special Instructions"
+                  value={formData.comments}
+                  onChange={(e) => handleInputChange("comments", e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </Modal.Body>
+            <Modal.Footer>
+              <SecondaryButton onClick={handleCloseEditModal}>
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton type="submit" disabled={loading}>
+                {loading ? <LoadingSpinner size="sm" /> : 'Update Sale'}
+              </PrimaryButton>
+            </Modal.Footer>
+          </Form>
         </StyledModal>
       </AnimatedContainer>
     </Container>
