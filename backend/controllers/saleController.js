@@ -26,25 +26,7 @@ exports.getSaleById = async (req, res) => {
     if (!sale) {
       return res.status(404).json({ message: 'Sale not found' });
     }
-    
-    // Format the response to include all needed fields
-    const formattedSale = {
-      ...sale.toObject(),
-      items: sale.items.map(item => ({
-        ...item,
-        barcode: item.barcode || item.product.barcode 
-      })),
-      subtotalAmount: sale.subtotal || sale.totalAmount,
-      discountAmount: sale.discountAmount,
-      taxAmount: sale.taxAmount,
-      shippingAmount: sale.shipping,
-      otherAmount: sale.other
-    };
-
-    console.log("called", formattedSale.items);
-    
-    
-    res.json(formattedSale);
+    res.json(sale);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

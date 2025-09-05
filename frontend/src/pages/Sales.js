@@ -68,9 +68,8 @@ const StyledTable = styled(Table)`
   thead {
     background: linear-gradient(to right, #3498db);
     color: white;
-    
     th {
-        background: linear-gradient(to right, #3498db);
+      background: linear-gradient(to right, #3498db);
       border: none;
       padding: 1.2rem;
       font-weight: 500;
@@ -95,7 +94,7 @@ const StyledTable = styled(Table)`
 `;
 
 const PrimaryButton = styled(Button)`
-        background: linear-gradient(to right, #3498db);
+  background: linear-gradient(to right, #3498db);
   border: none;
   border-radius: 25px;
   padding: 0.8rem 2rem;
@@ -1292,14 +1291,14 @@ const Sales = () => {
 
                 <h6 className="mt-4">Items</h6>
                 <Table striped bordered responsive>
-                  <thead>
+                  <thead style={{ background: '#3498db' }}>
                     <tr>
-                      <th>S.No</th>
-                      <th>Product</th>
-                      <th>Barcode</th>
-                      <th>Price</th>
-                      <th>Quantity</th>
-                      <th>Total</th>
+                      <th style={{ color: 'white' }}>S.No</th>
+                      <th style={{ color: 'white' }}>Product</th>
+                      <th style={{ color: 'white' }}>Barcode</th>
+                      <th style={{ color: 'white' }}>Price</th>
+                      <th style={{ color: 'white' }}>Quantity</th>
+                      <th style={{ color: 'white' }}>Total</th>
                     </tr>
                   </thead>
                   <tbody>
