@@ -10,7 +10,6 @@ exports.getAllSales = async (req, res) => {
       .populate('buyer', 'name phone')
       .populate('items.product', 'name category')
       .sort({ saleDate: -1 });
-      console.log(sales);
     res.json(sales);
   } catch (error) {
     res.status(500).json({ message: error.message });

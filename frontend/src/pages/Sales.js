@@ -1919,7 +1919,8 @@ const Sales = () => {
                   <Col md={6}>
                     <h6>Sale Information</h6>
                     <p><strong>ID:</strong> {selectedSale.saleId}</p>
-                    <p><strong>Date:</strong> {new Date(selectedSale.saleDate).toLocaleString()}</p>
+                    <p><strong>Date:</strong> {new Date(selectedSale.saleDate).toLocaleDateString()}</p>
+                    <p><strong>Time:</strong> {selectedSale.createdAt ? new Date(selectedSale.createdAt).toLocaleTimeString() : new Date(selectedSale.saleDate).toLocaleTimeString()}</p>
                     <p><strong>Status:</strong> <Badge bg="success">{selectedSale.status || 'completed'}</Badge></p>
                   </Col>
                   <Col md={6}>
