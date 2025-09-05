@@ -89,6 +89,8 @@ export const salesAPI = {
   getAll: () => api.get('/sales'),
   getById: (id) => api.get(`/sales/${id}`),
   create: (data) => api.post('/sales', data),
+  update: (id, data) => api.put(`/sales/${id}`, data),
+  delete: (id) => api.delete(`/sales/${id}`),
   scanBarcode: (data) => api.post('/sales/scan', data),
   getInvoice: (id) => api.get(`/sales/${id}/invoice`, { responseType: 'blob' }),
 };

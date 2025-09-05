@@ -1,3 +1,262 @@
+// SaleForm component for create/edit
+const SaleForm = ({ initialData, buyers, products, onSubmit, onCancel, loading }) => {
+  const [formData, setFormData] = useState(() => ({
+    buyer: initialData?.buyer?._id || initialData?.buyer || '',
+    saleDate: initialData?.saleDate ? new Date(initialData.saleDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    items: initialData?.items?.map(item => ({
+      product: item.product?._id || item.product || '',
+      productData: item.product || item.productData || {},
+      quantity: item.quantity || 1,
+      unitPrice: item.unitPrice || item.product?.price || item.productData?.price || 0,
+      barcode: item.barcode || item.product?.barcode || item.productData?.barcode || '',
+    })) || [],
+    subtotal: initialData?.subtotal || 0,
+    discount: initialData?.discount || 0,
+    discountAmount: initialData?.discountAmount || 0,
+    tax: initialData?.tax || 0,
+    taxAmount: initialData?.taxAmount || 0,
+    shipping: initialData?.shipping || 0,
+    other: initialData?.other || 0,
+    total: initialData?.totalAmount || initialData?.total || 0,
+    comments: initialData?.comments || ''
+  }));
+
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, subtotal: calculateSubtotal(prev.items) }));
+  }, [formData.items]);
+
+  const calculateSubtotal = (items) => {
+    return items.reduce((sum, item) => sum + (item.unitPrice * (item.quantity || 1)), 0);
+  };
+
+  const handleInputChange = (name, value) => {
+    setFormData(prev => {
+      const updated = { ...prev, [name]: value };
+      if (["discount", "tax", "shipping", "other", "items"].includes(name)) {
+        return calculateTotals(updated);
+      }
+      return updated;
+    });
+  };
+
+  const calculateTotals = (data) => {
+    const subtotal = calculateSubtotal(data.items);
+    const discountAmount = subtotal * (data.discount / 100);
+    const taxableAmount = subtotal - discountAmount;
+    const taxAmount = taxableAmount * (data.tax / 100);
+    const total = taxableAmount + taxAmount + Number(data.shipping) + Number(data.other);
+    return { ...data, subtotal, discountAmount, taxAmount, total };
+  };
+
+  const handleItemChange = (idx, field, value) => {
+    setFormData(prev => {
+      const items = [...prev.items];
+      items[idx] = { ...items[idx], [field]: value };
+      return calculateTotals({ ...prev, items });
+    });
+  };
+
+  const handleAddItem = () => {
+    setFormData(prev => ({
+      ...prev,
+      items: [...prev.items, { product: '', productData: {}, quantity: 1, unitPrice: 0, barcode: '' }]
+    }));
+  };
+
+  const handleRemoveItem = (idx) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== idx)
+    }));
+  };
+
+  const handleProductSelect = (idx, productId) => {
+    const product = products.find(p => p._id === productId);
+    if (product) {
+      setFormData(prev => {
+        const items = [...prev.items];
+        items[idx] = {
+          ...items[idx],
+          product: product._id,
+          productData: product,
+          unitPrice: product.price,
+          barcode: product.barcode
+        };
+        return calculateTotals({ ...prev, items });
+      });
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.buyer || formData.items.length === 0) return;
+    // Prepare data for API
+    const formatted = {
+      ...formData,
+      items: formData.items.map(item => ({
+        product: item.product,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        barcode: item.barcode
+      }))
+    };
+    onSubmit(formatted);
+  };
+
+  return (
+    <Form onSubmit={handleSubmit}>
+      <Row>
+        <Col md={6}>
+          <FormGroup className="mb-3">
+            <Form.Label>Buyer</Form.Label>
+            <Form.Select
+              name="buyer"
+              value={formData.buyer}
+              onChange={e => handleInputChange('buyer', e.target.value)}
+              required
+            >
+              <option value="">Select Buyer</option>
+              {buyers.map(buyer => (
+                <option key={buyer._id} value={buyer._id}>{buyer.name}</option>
+              ))}
+            </Form.Select>
+          </FormGroup>
+        </Col>
+        <Col md={6}>
+          <FormGroup className="mb-3">
+            <Form.Label>Sale Date</Form.Label>
+            <Form.Control
+              type="date"
+              name="saleDate"
+              value={formData.saleDate}
+              onChange={e => handleInputChange('saleDate', e.target.value)}
+              required
+            />
+          </FormGroup>
+        </Col>
+      </Row>
+      <h6>Items</h6>
+      <Table bordered responsive className="mb-3">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Barcode</th>
+            <th>Price</th>
+            <th>Qty</th>
+            <th>Total</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {formData.items.map((item, idx) => (
+            <tr key={idx}>
+              <td>
+                <Form.Select
+                  value={item.product}
+                  onChange={e => handleProductSelect(idx, e.target.value)}
+                  required
+                >
+                  <option value="">Select Product</option>
+                  {products.map(product => (
+                    <option key={product._id} value={product._id}>{product.name}</option>
+                  ))}
+                </Form.Select>
+              </td>
+              <td>{item.barcode}</td>
+              <td>
+                <Form.Control
+                  type="number"
+                  value={item.unitPrice}
+                  min="0"
+                  onChange={e => handleItemChange(idx, 'unitPrice', Number(e.target.value))}
+                  required
+                />
+              </td>
+              <td>
+                <Form.Control
+                  type="number"
+                  value={item.quantity}
+                  min="1"
+                  onChange={e => handleItemChange(idx, 'quantity', Number(e.target.value))}
+                  required
+                />
+              </td>
+              <td>{(item.unitPrice * item.quantity).toFixed(2)}</td>
+              <td>
+                <DangerButton size="sm" onClick={() => handleRemoveItem(idx)}>Remove</DangerButton>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      <Button variant="secondary" onClick={handleAddItem} className="mb-3">+ Add Item</Button>
+      <Row className="mb-3">
+        <Col md={3}>
+          <FormGroup>
+            <Form.Label>Discount (%)</Form.Label>
+            <Form.Control
+              type="number"
+              value={formData.discount}
+              min="0"
+              max="100"
+              onChange={e => handleInputChange('discount', Number(e.target.value))}
+            />
+          </FormGroup>
+        </Col>
+        <Col md={3}>
+          <FormGroup>
+            <Form.Label>Tax (%)</Form.Label>
+            <Form.Control
+              type="number"
+              value={formData.tax}
+              min="0"
+              max="100"
+              onChange={e => handleInputChange('tax', Number(e.target.value))}
+            />
+          </FormGroup>
+        </Col>
+        <Col md={3}>
+          <FormGroup>
+            <Form.Label>Shipping</Form.Label>
+            <Form.Control
+              type="number"
+              value={formData.shipping}
+              min="0"
+              onChange={e => handleInputChange('shipping', Number(e.target.value))}
+            />
+          </FormGroup>
+        </Col>
+        <Col md={3}>
+          <FormGroup>
+            <Form.Label>Other</Form.Label>
+            <Form.Control
+              type="number"
+              value={formData.other}
+              min="0"
+              onChange={e => handleInputChange('other', Number(e.target.value))}
+            />
+          </FormGroup>
+        </Col>
+      </Row>
+      <div className="mb-3">
+        <strong>Final Total: ₹{formData.total.toFixed(2)}</strong>
+      </div>
+      <FormGroup className="mb-3">
+        <Form.Label>Comments</Form.Label>
+        <Form.Control
+          as="textarea"
+          value={formData.comments}
+          onChange={e => handleInputChange('comments', e.target.value)}
+          rows={2}
+        />
+      </FormGroup>
+      <div className="d-flex justify-content-end gap-2">
+        <SecondaryButton type="button" onClick={onCancel}>Cancel</SecondaryButton>
+        <PrimaryButton type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save'}</PrimaryButton>
+      </div>
+    </Form>
+  );
+};
 import React, { useState, useEffect, useRef } from "react";
 import {
   Button,
@@ -803,6 +1062,96 @@ const TableRow = styled.tr`
 
 //logic
 const Sales = () => {
+  // Password confirmation for edit
+  const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
+  const [editSaleIdToConfirm, setEditSaleIdToConfirm] = useState(null);
+  const [editPassword, setEditPassword] = useState("");
+  const [editPasswordError, setEditPasswordError] = useState("");
+
+  // Show password modal before edit
+  const requestEditSale = (sale) => {
+    setEditSaleIdToConfirm(sale);
+    setEditPassword("");
+    setEditPasswordError("");
+    setShowEditConfirmModal(true);
+  };
+
+  // Confirm password and open edit modal
+  const confirmEditSale = () => {
+    if (editPassword !== "admin_confirm") {
+      setEditPasswordError("Incorrect password. Please enter correct password.");
+      return;
+    }
+    setShowEditConfirmModal(false);
+    setEditPassword("");
+    setEditPasswordError("");
+    handleEdit(editSaleIdToConfirm);
+    setEditSaleIdToConfirm(null);
+  };
+  // Password confirmation for delete
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [deleteSaleId, setDeleteSaleId] = useState(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletePasswordError, setDeletePasswordError] = useState("");
+
+  // Show password modal before delete
+  const requestDeleteSale = (saleId) => {
+    setDeleteSaleId(saleId);
+    setDeletePassword("");
+    setDeletePasswordError("");
+    setShowDeleteConfirmModal(true);
+  };
+
+  // Confirm password and delete
+  const confirmDeleteSale = async () => {
+    if (deletePassword !== "admin_confirm") {
+      setDeletePasswordError("Incorrect password. Please enter correct password.");
+      return;
+    }
+    setShowDeleteConfirmModal(false);
+    setDeletePassword("");
+    setDeletePasswordError("");
+    await handleDeleteSale(deleteSaleId);
+    setDeleteSaleId(null);
+  };
+  // Edit Sale Modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editSaleData, setEditSaleData] = useState(null);
+
+  // Handle Edit button click
+  const handleEdit = (sale) => {
+    setEditSaleData(sale);
+    setShowEditModal(true);
+  };
+
+  // Handle Edit Sale submit
+  const handleEditSubmit = async (updatedData) => {
+    try {
+      setLoading(true);
+      await salesAPI.update(editSaleData._id, updatedData);
+      setSuccess('Sale updated successfully');
+      setShowEditModal(false);
+      fetchSales();
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to update sale');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Delete Sale (actual API call)
+  const handleDeleteSale = async (saleId) => {
+    try {
+      setLoading(true);
+      await salesAPI.delete(saleId);
+      setSuccess('Sale deleted and product quantities restored');
+      fetchSales();
+    } catch (error) {
+      setError(error.response?.data?.message || 'Failed to delete sale');
+    } finally {
+      setLoading(false);
+    }
+  };
   const [sales, setSales] = useState([]);
   const [buyers, setBuyers] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -850,7 +1199,6 @@ const Sales = () => {
     setLoading(true);
     try {
       await Promise.all([fetchSales(), fetchBuyers(), fetchProducts()]);
-      console.log("completed");
     } catch (error) {
       setError('Failed to fetch data');
     } finally {
@@ -891,8 +1239,6 @@ const Sales = () => {
   const fetchProducts = async () => {
     try {
       const response = await productsAPI.getAll();
-      console.log("Products fetched successfully:", response.data.length);
-      console.log("Sample product:", response.data[0]);
       setProducts(response.data);
     } catch (error) {
       console.error("Failed to fetch products:", error);
@@ -1604,16 +1950,102 @@ const Sales = () => {
                   </SecondaryButton>
                   <SuccessButton 
                     size="sm"
+                    className="me-2"
                     onClick={() => handleGenerateInvoice(sale)}
                     disabled={loading}
                   >
                     📄 Invoice
                   </SuccessButton>
+                  <PrimaryButton
+                    size="sm"
+                    className="me-2"
+                    onClick={() => requestEditSale(sale)}
+                    disabled={loading}
+                  >
+                    ✏️ Edit
+                  </PrimaryButton>
+        {/* Edit Sale Password Confirmation Modal */}
+        <StyledModal show={showEditConfirmModal} onHide={() => setShowEditConfirmModal(false)} size="sm" centered>
+          <Modal.Header closeButton>
+            <Modal.Title>Confirm Edit</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>To edit this sale, please enter the admin password:</p>
+            <Form.Group className="mb-3">
+              <Form.Label>Password</Form.Label>
+              <Form.Control
+                type="password"
+                value={editPassword}
+                onChange={e => setEditPassword(e.target.value)}
+                placeholder="Enter password"
+                autoFocus
+              />
+              {editPasswordError && (
+                <Alert variant="danger" className="mt-2">{editPasswordError}</Alert>
+              )}
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <SecondaryButton onClick={() => setShowEditConfirmModal(false)}>Cancel</SecondaryButton>
+            <PrimaryButton onClick={confirmEditSale}>Edit</PrimaryButton>
+          </Modal.Footer>
+        </StyledModal>
+                  <DangerButton
+                    size="sm"
+                    onClick={() => requestDeleteSale(sale._id)}
+                    disabled={loading}
+                  >
+                    🗑️ Delete
+                  </DangerButton>
+        {/* Delete Sale Password Confirmation Modal */}
+        <StyledModal show={showDeleteConfirmModal} onHide={() => setShowDeleteConfirmModal(false)} size="sm" centered>
+          <Modal.Header closeButton>
+            <Modal.Title>Confirm Delete</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>To delete this sale, please enter the admin password:</p>
+            <Form.Group className="mb-3">
+              <Form.Label>Password</Form.Label>
+              <Form.Control
+                type="password"
+                value={deletePassword}
+                onChange={e => setDeletePassword(e.target.value)}
+                placeholder="Enter password"
+                autoFocus
+              />
+              {deletePasswordError && (
+                <Alert variant="danger" className="mt-2">{deletePasswordError}</Alert>
+              )}
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <SecondaryButton onClick={() => setShowDeleteConfirmModal(false)}>Cancel</SecondaryButton>
+            <DangerButton onClick={confirmDeleteSale}>Delete</DangerButton>
+          </Modal.Footer>
+        </StyledModal>
                 </td>
               </TableRow>
             ))}
           </tbody>
         </StyledTable>
+        {/* Edit Sale Modal */}
+        <StyledModal show={showEditModal} onHide={() => setShowEditModal(false)} size="lg" centered>
+          <Modal.Header closeButton>
+            <Modal.Title>Edit Sale</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {editSaleData && (
+              <SaleForm
+                initialData={editSaleData}
+                buyers={buyers}
+                products={products}
+                loading={loading}
+                onSubmit={handleEditSubmit}
+                onCancel={() => setShowEditModal(false)}
+              />
+            )}
+          </Modal.Body>
+        </StyledModal>
 
         {/* New Sale Modal */}
         <StyledModal show={showModal} onHide={handleCloseModal} size="lg" centered>
