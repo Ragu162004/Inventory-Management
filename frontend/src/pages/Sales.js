@@ -11,9 +11,112 @@ import {
   Spinner,
   Badge
 } from "react-bootstrap";
-import { salesAPI, buyersAPI, productsAPI } from "../services/api";
+import { salesAPI, buyersAPI, productsAPI, barcodesAPI } from "../services/api";
 import Quagga from "quagga";
-import styled, { keyframes, css } from 'styled-components';
+import styled, { keyframes, css, createGlobalStyle } from 'styled-components';
+
+// Print styles
+const PrintStyles = createGlobalStyle`
+  @media print {
+    * {
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    body * {
+      visibility: hidden;
+    }
+    
+    .modal, .modal * {
+      visibility: visible;
+    }
+    
+    .modal {
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      min-height: 100vh !important;
+      max-height: none !important;
+      height: auto !important;
+      overflow: visible !important;
+      background: white !important;
+      transform: none !important;
+      z-index: 1 !important;
+    }
+    
+    .modal-dialog {
+      max-width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      height: auto !important;
+      transform: none !important;
+    }
+    
+    .modal-content {
+      border: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      height: auto !important;
+      background: white !important;
+      transform: none !important;
+    }
+    
+    .modal-header, .modal-footer {
+      display: none !important;
+    }
+    
+    .modal-body {
+      padding: 0 !important;
+      background: white !important;
+      margin: 0 !important;
+    }
+    
+    @page {
+      size: A4;
+      margin: 0.5in;
+    }
+    
+    table {
+      page-break-inside: avoid;
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    
+    tr {
+      page-break-inside: avoid;
+    }
+    
+    h1, h2, h3 {
+      page-break-after: avoid;
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    
+    /* Force colors to print */
+    thead, thead th {
+      background: #3498db !important;
+      color: white !important;
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    
+    .bg-light {
+      background: #f8f9fa !important;
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    
+    /* Ensure proper spacing and layout */
+    .invoice-container {
+      max-width: 100% !important;
+      width: 100% !important;
+    }
+  }
+`;
 
 // Animations
 const fadeIn = keyframes`
@@ -318,20 +421,382 @@ const LowStockAlert = styled(Alert)`
   animation: ${pulse} 2s;
 `;
 
+// Invoice Styled Components
+const InvoiceContainer = styled.div`
+  background: white;
+  padding: 1.5rem;
+  max-width: 800px;
+  margin: 0 auto;
+  font-family: 'Arial', sans-serif;
+  line-height: 1.4;
+  color: #333;
+  font-size: 0.9rem;
+  
+  @media print {
+    padding: 1rem !important;
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    font-size: 12pt !important;
+    line-height: 1.3 !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    margin: 0 !important;
+    
+    /* Ensure all nested elements inherit print styles */
+    *, *::before, *::after {
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+  }
+`;
+
+const InvoiceHeader = styled.div`
+  text-align: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 3px solid #3498db;
+  padding-bottom: 1rem;
+  
+  @media print {
+    border-bottom: 3px solid #3498db !important;
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    margin-bottom: 1rem !important;
+    padding-bottom: 0.8rem !important;
+  }
+  
+  h1 {
+    color: #3498db;
+    font-size: 2rem;
+    margin-bottom: 0.3rem;
+    font-weight: bold;
+    
+    @media print {
+      color: #3498db !important;
+      font-size: 24pt !important;
+      margin-bottom: 0.2rem !important;
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+  }
+  
+  h2 {
+    color: #666;
+    font-size: 1rem;
+    margin: 0;
+    font-weight: normal;
+    
+    @media print {
+      color: #666 !important;
+      font-size: 14pt !important;
+      margin: 0 !important;
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+  }
+`;
+
+const InvoiceDetails = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  
+  @media print {
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+`;
+
+const InvoiceSection = styled.div`
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  
+  @media print {
+    background: #f8f9fa !important;
+    padding: 0.8rem !important;
+    border: 1px solid #e9ecef !important;
+    border-radius: 6px !important;
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  h3 {
+    color: #3498db;
+    margin-bottom: 0.8rem;
+    font-size: 1rem;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 0.3rem;
+    
+    @media print {
+      color: #3498db !important;
+      font-size: 12pt !important;
+      margin-bottom: 0.6rem !important;
+      border-bottom: 2px solid #3498db !important;
+      padding-bottom: 0.3rem !important;
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+  }
+  
+  p {
+    margin: 0.3rem 0;
+    font-size: 0.9rem;
+    
+    @media print {
+      margin: 0.2rem 0 !important;
+      font-size: 10pt !important;
+      color: #333 !important;
+    }
+    
+    strong {
+      color: #333;
+      display: inline-block;
+      width: 70px;
+      
+      @media print {
+        color: #333 !important;
+        width: 60px !important;
+      }
+    }
+  }
+`;
+
+const InvoiceTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 0.85rem;
+  
+  @media print {
+    margin: 1rem 0;
+    box-shadow: none;
+    font-size: 0.75rem;
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+    border: 2px solid #333 !important;
+  }
+  
+  thead {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: white;
+    
+    @media print {
+      background: #3498db !important;
+      color: white !important;
+      -webkit-print-color-adjust: exact;
+      color-adjust: exact;
+    }
+    
+    th {
+      padding: 0.8rem 0.6rem;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.8rem;
+      border: none;
+      
+      @media print {
+        padding: 0.6rem 0.4rem;
+        font-size: 0.75rem;
+        border: 1px solid #333 !important;
+        background: #3498db !important;
+        color: white !important;
+      }
+    }
+  }
+  
+  tbody {
+    tr {
+      border-bottom: 1px solid #e9ecef;
+      transition: all 0.3s ease;
+      
+      &:hover {
+        background-color: #f8f9fa;
+      }
+      
+      &:last-child {
+        border-bottom: none;
+      }
+      
+      @media print {
+        &:hover {
+          background-color: transparent !important;
+        }
+      }
+    }
+    
+    td {
+      padding: 0.6rem 0.4rem;
+      border: 1px solid #dee2e6;
+      font-size: 0.8rem;
+      
+      @media print {
+        padding: 0.4rem 0.3rem;
+        font-size: 0.75rem;
+        border: 1px solid #333 !important;
+      }
+    }
+  }
+`;
+
+const InvoiceSummary = styled.div`
+  margin-top: 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1.5rem;
+  
+  @media print {
+    margin-top: 1rem;
+    gap: 1rem;
+  }
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const SummaryTable = styled.table`
+  border-collapse: collapse;
+  min-width: 250px;
+  font-size: 0.9rem;
+  
+  @media print {
+    min-width: 200px;
+    font-size: 0.8rem;
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+  }
+  
+  tr {
+    border-bottom: 1px solid #e9ecef;
+    
+    &:last-child {
+      border-bottom: 3px solid #3498db;
+      background: #f8f9fa;
+      font-weight: bold;
+      font-size: 1rem;
+      
+      @media print {
+        font-size: 0.9rem;
+        border-bottom: 3px solid #3498db !important;
+        background: #f8f9fa !important;
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+      }
+    }
+    
+    @media print {
+      border-bottom: 1px solid #333 !important;
+    }
+  }
+  
+  td {
+    padding: 0.6rem 0.8rem;
+    text-align: right;
+    
+    @media print {
+      padding: 0.4rem 0.6rem;
+      border: 1px solid #333 !important;
+    }
+    
+    &:first-child {
+      text-align: left;
+      font-weight: 500;
+    }
+  }
+`;
+
+const InvoiceFooter = styled.div`
+  margin-top: 2rem;
+  text-align: center;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e9ecef;
+  color: #666;
+  font-size: 0.85rem;
+  
+  @media print {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    font-size: 0.8rem;
+  }
+`;
+
+const PrintButton = styled(Button)`
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  border: none;
+  padding: 0.8rem 2rem;
+  font-weight: 600;
+  border-radius: 25px;
+  
+  &:hover {
+    background: linear-gradient(135deg, #20c997 0%, #28a745 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+  }
+  
+  @media print {
+    display: none;
+  }
+`;
+
 // Fixed TableRow component without inline animation
 const TableRow = styled.tr`
   transition: all 0.3s ease;
   
+  @media print {
+    page-break-inside: avoid !important;
+    transition: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  
   &:hover {
-        background: linear-gradient(to right, #3498db);
+    background: linear-gradient(to right, #3498db);
     color: white;
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    
+    @media print {
+      background: none !important;
+      color: inherit !important;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+  }
+  
+  &:nth-child(even) {
+    @media print {
+      background-color: #f8f9fa !important;
+      -webkit-print-color-adjust: exact !important;
+      color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
   }
   
   td {
     padding: 1.2rem;
     border-color: #e9ecef;
+    
+    @media print {
+      padding: 0.5rem !important;
+      border-color: #e9ecef !important;
+      color: #333 !important;
+    }
   }
 `;
 
@@ -353,6 +818,8 @@ const Sales = () => {
   const [loading, setLoading] = useState(false);
   const [lowStockAlert, setLowStockAlert] = useState(null);
   const [products, setProducts] = useState([]);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceData, setInvoiceData] = useState(null);
 
   const scannerRef = useRef(null);
 
@@ -394,10 +861,21 @@ const Sales = () => {
   const fetchSales = async () => {
     try {
       const response = await salesAPI.getAll();
+      const salesData = response.data || [];
       
-      setSales(response.data);
+      // Ensure each sale has proper structure
+      const formattedSales = salesData.map(sale => ({
+        ...sale,
+        buyer: sale.buyer || { name: 'Unknown Buyer', phone: '', email: '' },
+        items: sale.items || [],
+        totalAmount: sale.totalAmount || 0
+      }));
+      
+      setSales(formattedSales);
     } catch (error) {
-      setError("Failed to fetch sales");
+      console.error("Failed to fetch sales:", error);
+      setError("Failed to fetch sales data");
+      setSales([]);
     }
   };
 
@@ -886,27 +1364,168 @@ const Sales = () => {
 
   const handleView = async (sale) => {
     try {
+      setLoading(true);
       const response = await salesAPI.getById(sale._id);
-      setSelectedSale(response.data);
+      const saleData = response.data;
+      
+      console.log("Original sale data:", saleData);
+      
+      // Step 1: Fetch all products
+      const productsResponse = await productsAPI.getAll();
+      const allProducts = productsResponse.data || [];
+      
+      console.log("All products fetched:", allProducts.length);
+      
+      // If items don't have complete product details, enhance them
+      if (saleData.items && saleData.items.length > 0) {
+        console.log("Processing items:", saleData.items);
+        
+        const enhancedItems = await Promise.all(
+          saleData.items.map(async (item, index) => {
+            console.log(`Processing item ${index}:`, item);
+            
+            let productData = item.product;
+            
+            // If product details are missing or incomplete and barcode exists
+            if ((!productData || !productData.name) && item.barcode) {
+              console.log(`Looking for product with barcode: ${item.barcode}`);
+              
+              // Step 2: Filter by barcode from all products
+              const matchingProduct = allProducts.find(product => 
+                product.barcode === item.barcode
+              );
+              
+              if (matchingProduct) {
+                console.log(`Found matching product:`, matchingProduct);
+                // Step 3: Assign the values
+                productData = matchingProduct;
+              } else {
+                console.log(`No matching product found, trying barcode API...`);
+                // Try barcode API as fallback
+                try {
+                  const barcodeResponse = await barcodesAPI.getByBarcode(item.barcode);
+                  console.log(`Barcode API response:`, barcodeResponse.data);
+                  
+                  if (barcodeResponse.data && barcodeResponse.data.product) {
+                    productData = {
+                      ...barcodeResponse.data.product,
+                      price: barcodeResponse.data.price,
+                      barcode: item.barcode
+                    };
+                    console.log(`Using barcode API data:`, productData);
+                  }
+                } catch (error) {
+                  console.log(`Failed to fetch product details for barcode ${item.barcode}:`, error);
+                  // Set default values if product not found
+                  productData = {
+                    name: 'Product Not Found',
+                    category: 'N/A',
+                    description: '',
+                    barcode: item.barcode
+                  };
+                }
+              }
+            }
+            
+            const enhancedItem = {
+              ...item,
+              product: productData,
+              barcode: item.barcode || productData?.barcode
+            };
+            
+            console.log(`Enhanced item ${index}:`, enhancedItem);
+            return enhancedItem;
+          })
+        );
+        
+        saleData.items = enhancedItems;
+        console.log("Final enhanced sale data:", saleData);
+      }
+      
+      setSelectedSale(saleData);
       setShowViewModal(true);
     } catch (error) {
       setError("Failed to fetch sale details");
+      console.error("Error fetching sale details:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDownloadInvoice = async (id) => {
+  const handleGenerateInvoice = async (sale) => {
     try {
-      const response = await salesAPI.getInvoice(id);
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `sale-${id}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      setLoading(true);
+      const response = await salesAPI.getById(sale._id);
+      const saleData = response.data;
+      
+      // Step 1: Fetch all products
+      const productsResponse = await productsAPI.getAll();
+      const allProducts = productsResponse.data || [];
+      
+      // Enhance items with product details
+      if (saleData.items && saleData.items.length > 0) {
+        const enhancedItems = await Promise.all(
+          saleData.items.map(async (item) => {
+            let productData = item.product;
+            
+            // If product details are missing or incomplete and barcode exists
+            if ((!productData || !productData.name) && item.barcode) {
+              // Step 2: Filter by barcode from all products
+              const matchingProduct = allProducts.find(product => 
+                product.barcode === item.barcode
+              );
+              
+              if (matchingProduct) {
+                // Step 3: Assign the values
+                productData = matchingProduct;
+              } else {
+                // Try barcode API as fallback
+                try {
+                  const barcodeResponse = await barcodesAPI.getByBarcode(item.barcode);
+                  if (barcodeResponse.data && barcodeResponse.data.product) {
+                    productData = {
+                      ...barcodeResponse.data.product,
+                      price: barcodeResponse.data.price,
+                      barcode: item.barcode
+                    };
+                  }
+                } catch (error) {
+                  console.log(`Failed to fetch product details for barcode ${item.barcode}`);
+                  productData = {
+                    name: 'Product Not Found',
+                    category: 'N/A',
+                    description: '',
+                    barcode: item.barcode
+                  };
+                }
+              }
+            }
+            
+            return {
+              ...item,
+              product: productData,
+              barcode: item.barcode || productData?.barcode
+            };
+          })
+        );
+        saleData.items = enhancedItems;
+      }
+      
+      setInvoiceData(saleData);
+      setShowInvoiceModal(true);
     } catch (error) {
-      setError("Failed to download invoice");
+      setError("Failed to generate invoice");
+      console.error("Error generating invoice:", error);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handlePrintInvoice = () => {
+    // Add a delay to ensure styles are applied
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   if (loading && sales.length === 0) {
@@ -919,6 +1538,7 @@ const Sales = () => {
 
   return (
     <Container>
+      <PrintStyles />
       <AnimatedContainer>
         <HeaderSection>
           <Row className="">
@@ -950,6 +1570,7 @@ const Sales = () => {
             <tr>
               <th>ID</th>
               <th>Buyer</th>
+              <th>Items</th>
               <th>Date</th>
               <th>Total</th>
               <th>Actions</th>
@@ -959,14 +1580,33 @@ const Sales = () => {
             {sales.map((sale) => (
               <TableRow key={sale._id}>
                 <td><strong>{sale.saleId}</strong></td>
-                <td>{sale.buyer?.name}</td>
-                <td>{new Date(sale.saleDate).toLocaleDateString()}</td>
-                <td>₹{sale.totalAmount.toFixed(2)}</td>
                 <td>
-                  <SecondaryButton size="sm" className="me-2" onClick={() => handleView(sale)}>
+                  <div>
+                    <strong>{sale.buyer?.name || 'N/A'}</strong>
+                    {sale.buyer?.phone && (
+                      <div><small className="text-muted">{sale.buyer.phone}</small></div>
+                    )}
+                  </div>
+                </td>
+                <td>
+                  <Badge bg="info">{sale.items?.length || 0} items</Badge>
+                </td>
+                <td>{new Date(sale.saleDate).toLocaleDateString()}</td>
+                <td><strong>₹{sale.totalAmount?.toFixed(2) || '0.00'}</strong></td>
+                <td>
+                  <SecondaryButton 
+                    size="sm" 
+                    className="me-2" 
+                    onClick={() => handleView(sale)}
+                    disabled={loading}
+                  >
                     👁️ View
                   </SecondaryButton>
-                  <SuccessButton size="sm" onClick={() => handleDownloadInvoice(sale._id)}>
+                  <SuccessButton 
+                    size="sm"
+                    onClick={() => handleGenerateInvoice(sale)}
+                    disabled={loading}
+                  >
                     📄 Invoice
                   </SuccessButton>
                 </td>
@@ -1280,43 +1920,75 @@ const Sales = () => {
                     <h6>Sale Information</h6>
                     <p><strong>ID:</strong> {selectedSale.saleId}</p>
                     <p><strong>Date:</strong> {new Date(selectedSale.saleDate).toLocaleString()}</p>
+                    <p><strong>Status:</strong> <Badge bg="success">{selectedSale.status || 'completed'}</Badge></p>
                   </Col>
                   <Col md={6}>
                     <h6>Buyer Details</h6>
-                    <p><strong>Name:</strong> {selectedSale.buyer.name}</p>
-                    <p><strong>Email:</strong> {selectedSale.buyer.email}</p>
-                    <p><strong>Phone:</strong> {selectedSale.buyer.phone}</p>
+                    <p><strong>Name:</strong> {selectedSale.buyer?.name || 'N/A'}</p>
+                    <p><strong>Email:</strong> {selectedSale.buyer?.email || 'N/A'}</p>
+                    <p><strong>Phone:</strong> {selectedSale.buyer?.phone || 'N/A'}</p>
+                    {selectedSale.buyer?.address && (
+                      <p><strong>Address:</strong> {selectedSale.buyer.address}</p>
+                    )}
                   </Col>
                 </Row>
 
-                <h6 className="mt-4">Items</h6>
+                <h6 className="mt-4">Items ({selectedSale.items?.length || 0})</h6>
                 <Table striped bordered responsive>
                   <thead style={{ background: '#3498db' }}>
                     <tr>
-                      <th style={{ color: 'white' }}>S.No</th>
-                      <th style={{ color: 'white' }}>Product</th>
-                      <th style={{ color: 'white' }}>Barcode</th>
-                      <th style={{ color: 'white' }}>Price</th>
-                      <th style={{ color: 'white' }}>Quantity</th>
-                      <th style={{ color: 'white' }}>Total</th>
+                      <th>S.No</th>
+                      <th>Product</th>
+                      <th>Category</th>
+                      <th>Barcode</th>
+                      <th>Price</th>
+                      <th>Quantity</th>
+                      <th>Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(selectedSale.items || []).map((item, idx) => (
-                      <tr key={item._id || idx}>
-                        <td>{idx + 1}</td>
-                        <td>{item.product?.name || '-'}</td>
-                        <td><BarcodeBadge>{item.barcode || item.product?.barcode || '-'}</BarcodeBadge></td>
-                        <td>₹{item.unitPrice?.toFixed(2) ?? '-'}</td>
-                        <td>{item.quantity || 1}</td>
-                        <td>₹{((item.unitPrice || 0) * (item.quantity || 1)).toFixed(2)}</td>
-                      </tr>
-                    ))}
+                    {(selectedSale.items || []).map((item, idx) => {
+                      const product = item.product || {};
+                      const productName = product.name || item.productData?.name || 'Product Not Found';
+                      const productCategory = product.category || item.productData?.category || 'N/A';
+                      const productDescription = product.description || item.productData?.description || '';
+                      const unitPrice = item.unitPrice || product.price || item.productData?.price || 0;
+                      const barcode = item.barcode || product.barcode || 'N/A';
+
+                      return (
+                        <tr key={item._id || idx}>
+                          <td>{idx + 1}</td>
+                          <td>
+                            <div>
+                              <strong>{productName}</strong>
+                              {productDescription && (
+                                <div>
+                                  <small className="text-muted">
+                                    {productDescription.length > 50 
+                                      ? `${productDescription.substring(0, 50)}...` 
+                                      : productDescription}
+                                  </small>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td>{productCategory}</td>
+                          <td><BarcodeBadge>{barcode}</BarcodeBadge></td>
+                          <td>₹{unitPrice.toFixed(2)}</td>
+                          <td>{( (selectedSale.subtotal ?? selectedSale.subtotalAmount ?? selectedSale.totalAmount) / unitPrice ).toFixed(0)}</td>
+                          <td>
+                              ₹{(
+                                ((selectedSale.subtotal ?? selectedSale.subtotalAmount ?? selectedSale.totalAmount))
+                              ).toFixed(2)}
+                            </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td colSpan="5" className="text-end"><strong>Subtotal:</strong></td>
-                      <td><strong>₹{selectedSale.subtotal?.toFixed(2) || selectedSale.subtotalAmount?.toFixed(2) || selectedSale.totalAmount.toFixed(2)}</strong></td>
+                      <td colSpan="6" className="text-end"><strong>Subtotal:</strong></td>
+                      <td><strong>₹{selectedSale.subtotal?.toFixed(2) || selectedSale.subtotalAmount?.toFixed(2) || selectedSale.totalAmount?.toFixed(2) || '0.00'}</strong></td>
                     </tr>
                   </tfoot>
                 </Table>
@@ -1348,10 +2020,164 @@ const Sales = () => {
                   </Col>
                 </Row>
                 
-                <TotalDisplay className="mt-4">Total: ₹{selectedSale.totalAmount.toFixed(2)}</TotalDisplay>
+                <TotalDisplay className="mt-4">Total: ₹{selectedSale.totalAmount?.toFixed(2) || '0.00'}</TotalDisplay>
+                
+                {selectedSale.comments && (
+                  <div className="mt-3">
+                    <h6>Comments</h6>
+                    <div className="p-3 bg-light rounded">
+                      <p className="mb-0">{selectedSale.comments}</p>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </Modal.Body>
+        </StyledModal>
+
+        {/* Invoice Modal */}
+        <StyledModal
+          show={showInvoiceModal}
+          onHide={() => setShowInvoiceModal(false)}
+          size="xl"
+          centered
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Invoice</Modal.Title>
+          </Modal.Header>
+          <Modal.Body className="p-0">
+            {invoiceData && (
+              <InvoiceContainer>
+                <InvoiceHeader>
+                  <h1>VELPAARI ENTERPRISES</h1>
+                  <h2>Sales Invoice</h2>
+                </InvoiceHeader>
+
+                <InvoiceDetails>
+                  <InvoiceSection>
+                    <h3>Invoice Information</h3>
+                    <p><strong>Invoice ID:</strong> {invoiceData.saleId}</p>
+                    <p><strong>Date:</strong> {new Date(invoiceData.saleDate).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}</p>
+                    <p><strong>Time:</strong> {invoiceData.createdAt ? new Date(invoiceData.createdAt).toLocaleTimeString() : new Date().toLocaleTimeString()}</p>
+                  </InvoiceSection>
+
+                  <InvoiceSection>
+                    <h3>Customer Details</h3>
+                    <p><strong>Customer:</strong> {invoiceData.buyer?.name || 'N/A'}</p>
+                    <p><strong>Contact:</strong> {invoiceData.buyer?.phone || 'N/A'}</p>
+                    <p><strong>Email:</strong> {invoiceData.buyer?.email || 'N/A'}</p>
+                    {invoiceData.buyer?.address && (
+                      <p><strong>Address:</strong> {invoiceData.buyer.address}</p>
+                    )}
+                  </InvoiceSection>
+                </InvoiceDetails>
+
+                <InvoiceTable>
+                  <thead>
+                    <tr>
+                      <th>S.No</th>
+                      <th>Product</th>
+                      <th>Category</th>
+                      <th>Barcode</th>
+                      <th>Price (₹)</th>
+                      <th>Quantity</th>
+                      <th>Total (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(invoiceData.items || []).map((item, idx) => {
+                      const product = item.product || {};
+                      const productName = product.name || item.productData?.name || 'Product Not Found';
+                      const productCategory = product.category || item.productData?.category || 'N/A';
+                      const unitPrice = item.unitPrice || product.price || item.productData?.price || 0;
+                      const barcode = item.barcode || product.barcode || 'N/A';
+                      
+                      return (
+                        <tr key={item._id || idx}>
+                          <td>{idx + 1}</td>
+                          <td>{productName}</td>
+                          <td>{productCategory}</td>
+                          <td>{barcode}</td>
+                          <td>₹{unitPrice.toFixed(2)}</td>
+                          <td>{( (invoiceData.subtotal ?? invoiceData.subtotalAmount ?? invoiceData.totalAmount) / unitPrice ).toFixed(0)}</td>
+                          <td>
+                              ₹{(
+                                ((invoiceData.subtotal ?? invoiceData.subtotalAmount ?? invoiceData.totalAmount))
+                              ).toFixed(2)}
+                            </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </InvoiceTable>
+
+                <InvoiceSummary>
+                  <div></div>
+                  <SummaryTable>
+                    <tbody>
+                      <tr>
+                        <td>Subtotal:</td>
+                        <td>₹{invoiceData.subtotal?.toFixed(2) || invoiceData.subtotalAmount?.toFixed(2) || '0.00'}</td>
+                      </tr>
+                      <tr>
+                        <td>Discount ({invoiceData.discount || 0}%):</td>
+                        <td>-₹{invoiceData.discountAmount?.toFixed(2) || '0.00'}</td>
+                      </tr>
+                      <tr>
+                        <td>Tax ({invoiceData.tax || 0}%):</td>
+                        <td>+₹{invoiceData.taxAmount?.toFixed(2) || '0.00'}</td>
+                      </tr>
+                      <tr>
+                        <td>Shipping:</td>
+                        <td>₹{invoiceData.shipping?.toFixed(2) || '0.00'}</td>
+                      </tr>
+                      <tr>
+                        <td>Others:</td>
+                        <td>₹{invoiceData.other?.toFixed(2) || '0.00'}</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Grand Total:</strong></td>
+                        <td><strong>₹{invoiceData.totalAmount?.toFixed(2) || '0.00'}</strong></td>
+                      </tr>
+                    </tbody>
+                  </SummaryTable>
+                </InvoiceSummary>
+
+                {invoiceData.comments && (
+                  <div style={{ marginTop: '2rem', padding: '1rem', background: '#f8f9fa', borderRadius: '8px' }}>
+                    <h4 style={{ color: '#3498db', marginBottom: '1rem' }}>Comments</h4>
+                    <p style={{ margin: 0 }}>{invoiceData.comments}</p>
+                  </div>
+                )}
+
+                <InvoiceFooter>
+                  <p><strong>Thank you for purchasing!</strong></p>
+                  <p>Generated on {new Date().toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long', 
+                    day: 'numeric'
+                  })} at {new Date().toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                  })}</p>
+                </InvoiceFooter>
+              </InvoiceContainer>
+            )}
+          </Modal.Body>
+          <Modal.Footer className="d-print-none">
+            <SecondaryButton onClick={() => setShowInvoiceModal(false)}>
+              Close
+            </SecondaryButton>
+            <PrintButton onClick={handlePrintInvoice}>
+              🖨️ Print Invoice
+            </PrintButton>
+          </Modal.Footer>
         </StyledModal>
       </AnimatedContainer>
     </Container>
