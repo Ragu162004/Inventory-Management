@@ -1,8 +1,17 @@
 // SaleForm component for create/edit
+function formatDate(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 const SaleForm = ({ initialData, buyers, products, onSubmit, onCancel, loading }) => {
   const [formData, setFormData] = useState(() => ({
     buyer: initialData?.buyer?._id || initialData?.buyer || '',
-    saleDate: initialData?.saleDate ? new Date(initialData.saleDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    saleDate: initialData?.saleDate ? formatDate(initialData.saleDate) : formatDate(new Date()),
     items: initialData?.items?.map(item => ({
       product: item.product?._id || item.product || '',
       productData: item.product || item.productData || {},
@@ -125,13 +134,14 @@ const SaleForm = ({ initialData, buyers, products, onSubmit, onCancel, loading }
         <Col md={6}>
           <FormGroup className="mb-3">
             <Form.Label>Sale Date</Form.Label>
-            <Form.Control
-              type="date"
-              name="saleDate"
-              value={formData.saleDate}
-              onChange={e => handleInputChange('saleDate', e.target.value)}
-              required
-            />
+              <Form.Control
+                type="text"
+                name="saleDate"
+                value={formData.saleDate}
+                onChange={e => handleInputChange('saleDate', e.target.value)}
+                required
+                placeholder="DD/MM/YYYY"
+              />
           </FormGroup>
         </Col>
       </Row>
@@ -155,6 +165,10 @@ const SaleForm = ({ initialData, buyers, products, onSubmit, onCancel, loading }
                   value={item.product}
                   onChange={e => handleProductSelect(idx, e.target.value)}
                   required
+                  style={{height: "150px",
+                          whiteSpace: "normal",   // allow wrapping
+                          lineHeight: "1.2",      // adjust spacing
+                          overflowWrap: "break-word",}}
                 >
                   <option value="">Select Product</option>
                   {products.map(product => (
@@ -1175,7 +1189,7 @@ const Sales = () => {
   // Initialize formData with all required fields
   const [formData, setFormData] = useState({
     buyer: "",
-    saleDate: new Date().toISOString().split("T")[0],
+    saleDate: formatDate(new Date()),
     items: [],
     subtotal: 0,
     discount: 0,
@@ -1249,7 +1263,7 @@ const Sales = () => {
     setShowModal(true);
     setFormData({
       buyer: "",
-      saleDate: new Date().toISOString().split("T")[0],
+      saleDate: formatDate(new Date()),
       items: [],
       subtotal: 0,
       discount: 0,
@@ -1937,7 +1951,7 @@ const Sales = () => {
                 <td>
                   <Badge bg="info">{sale.items?.length || 0} items</Badge>
                 </td>
-                <td>{new Date(sale.saleDate).toLocaleDateString()}</td>
+                <td>{formatDate(sale.saleDate)}</td>
                 <td><strong>₹{sale.totalAmount?.toFixed(2) || '0.00'}</strong></td>
                 <td>
                   <SecondaryButton 
@@ -2077,11 +2091,12 @@ const Sales = () => {
                   <FormGroup className="mb-3">
                     <Form.Label>Sale Date</Form.Label>
                     <Form.Control
-                      type="date"
+                      type="text"
                       name="saleDate"
                       value={formData.saleDate}
                       onChange={(e) => handleInputChange("saleDate", e.target.value)}
                       required
+                      placeholder="DD/MM/YYYY"
                     />
                   </FormGroup>
                 </Col>
@@ -2351,8 +2366,8 @@ const Sales = () => {
                   <Col md={6}>
                     <h6>Sale Information</h6>
                     <p><strong>ID:</strong> {selectedSale.saleId}</p>
-                    <p><strong>Date:</strong> {new Date(selectedSale.saleDate).toLocaleDateString()}</p>
-                    <p><strong>Time:</strong> {selectedSale.createdAt ? new Date(selectedSale.createdAt).toLocaleTimeString() : new Date(selectedSale.saleDate).toLocaleTimeString()}</p>
+                    <p><strong>Date:</strong> {formatDate(selectedSale.saleDate)}</p>
+                    <p><strong>Time:</strong> {selectedSale.createdAt ? new Date(selectedSale.createdAt).toLocaleTimeString('en-GB') : new Date(selectedSale.saleDate).toLocaleTimeString('en-GB')}</p>
                     <p><strong>Status:</strong> <Badge bg="success">{selectedSale.status || 'completed'}</Badge></p>
                   </Col>
                   <Col md={6}>
@@ -2487,12 +2502,8 @@ const Sales = () => {
                   <InvoiceSection>
                     <h3>Invoice Information</h3>
                     <p><strong>Invoice ID:</strong> {invoiceData.saleId}</p>
-                    <p><strong>Date:</strong> {new Date(invoiceData.saleDate).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}</p>
-                    <p><strong>Time:</strong> {invoiceData.createdAt ? new Date(invoiceData.createdAt).toLocaleTimeString() : new Date().toLocaleTimeString()}</p>
+                    <p><strong>Date:</strong> {formatDate(invoiceData.saleDate)}</p>
+                    <p><strong>Time:</strong> {invoiceData.createdAt ? new Date(invoiceData.createdAt).toLocaleTimeString('en-GB') : new Date().toLocaleTimeString('en-GB')}</p>
                   </InvoiceSection>
 
                   <InvoiceSection>
@@ -2583,15 +2594,11 @@ const Sales = () => {
 
                 <InvoiceFooter>
                   <p><strong>Thank you for purchasing!</strong></p>
-                  <p>Generated on {new Date().toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long', 
-                    day: 'numeric'
-                  })} at {new Date().toLocaleTimeString('en-US', {
+                  <p>Generated on {formatDate(new Date())} at {new Date().toLocaleTimeString('en-US', {
                     hour: '2-digit',
                     minute: '2-digit',
                     second: '2-digit',
-                    hour12: true
+                    hour12: false
                   })}</p>
                 </InvoiceFooter>
               </InvoiceContainer>
