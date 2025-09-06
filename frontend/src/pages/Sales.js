@@ -166,8 +166,9 @@ const SaleForm = ({ initialData, buyers, products, onSubmit, onCancel, loading }
                   onChange={e => handleProductSelect(idx, e.target.value)}
                   required
                   style={{height: "150px",
+                          width:"150px",
                           whiteSpace: "normal",   // allow wrapping
-                          lineHeight: "1.2",      // adjust spacing
+                          lineHeight: "1.5",      // adjust spacing
                           overflowWrap: "break-word",}}
                 >
                   <option value="">Select Product</option>
@@ -180,6 +181,7 @@ const SaleForm = ({ initialData, buyers, products, onSubmit, onCancel, loading }
               <td>
                 <Form.Control
                   type="number"
+                  step="any"
                   value={item.unitPrice}
                   min="0"
                   onChange={e => handleItemChange(idx, 'unitPrice', Number(e.target.value))}
@@ -188,7 +190,7 @@ const SaleForm = ({ initialData, buyers, products, onSubmit, onCancel, loading }
               </td>
               <td>
                 <Form.Control
-                  type="number"
+                  type="number" 
                   value={item.quantity}
                   min="1"
                   onChange={e => handleItemChange(idx, 'quantity', Number(e.target.value))}
