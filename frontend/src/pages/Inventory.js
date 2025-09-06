@@ -342,6 +342,26 @@ const LoadingSpinner = styled.div`
   }
 `;
 
+const GrandTotalRow = styled.tr`
+  background: linear-gradient(to right, #4a6fa5, #2c3e50);
+  color: white;
+  font-weight: bold;
+  
+  td {
+    padding: 1.2rem 1rem;
+    border-top: 2px solid #fff;
+    color: white;
+  }
+  
+  td:first-child {
+    border-radius: 0 0 0 12px;
+  }
+  
+  td:last-child {
+    border-radius: 0 0 12px 0;
+  }
+`;
+
 const Inventory = () => {
   const [products, setProducts] = useState([]);
   const [lowStock, setLowStock] = useState([]);
@@ -395,6 +415,11 @@ const Inventory = () => {
       currency: 'INR'
     }).format(amount);
   };
+
+  // Calculate grand total
+  const grandTotal = products.reduce((total, product) => {
+    return total + (product.price * product.quantity);
+  }, 0);
 
   if (loading) {
     return (
@@ -471,14 +496,6 @@ const Inventory = () => {
                     </StatusBadge>
                   </td>
                   <td>{product.vendor?.name || 'N/A'}</td>
-                {/*<ActionCell>
-                  <IconButton variant="edit" title="Edit Product">
-                    <i className="bi bi-pencil"></i>
-                  </IconButton>
-                  <IconButton variant="danger" title="Reorder Product">
-                    <i className="bi bi-cart-plus"></i>
-                  </IconButton>
-                </ActionCell>*/}
                 </tr>
               ))}
             </tbody>
@@ -562,6 +579,12 @@ const Inventory = () => {
                   </td>
                 </tr>
               ))}
+              <GrandTotalRow>
+                <td colSpan="4">GRAND TOTAL</td>
+                <td colSpan="1"></td>
+                <td>{formatCurrency(grandTotal)}</td>
+                <td colSpan="2"></td>
+              </GrandTotalRow>
             </tbody>
           </StyledTable>
         ) : (
