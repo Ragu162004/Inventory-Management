@@ -10,7 +10,7 @@ const generateBarcode = async (text) => {
       text: text, // Text to encode
       scale: 3, // 3x scaling factor
       height: 10, // Bar height, in millimeters
-      includetext: true, // Show human-readable text
+      includetext: true, // Show human-le text
       textxalign: 'center', // Always good to set this
       backgroundcolor: 'ffffff', // White background
       barcolor: '000000', // Black bars
@@ -80,17 +80,17 @@ const generateVPFashionsBarcode = async (itemName, barcodeId) => {
 
     // Step 3: Add "VP Fashions" (top)
     ctx.fillStyle = '#000000';
-    ctx.font = '20px Arial';
+    ctx.font = 'bold 50px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('VP Fashions', canvasWidth / 2, 25);
+    ctx.fillText('VP Fashions', canvasWidth / 2, 40);
 
     // Step 4: Draw barcode (middle)
     ctx.drawImage(barcodeImage, 20, 40);
 
     // Step 5: Add bottom texts
-  ctx.font = '16px Arial';
-  ctx.fillText(`ID No: ${barcodeId}`, canvasWidth / 2, barcodeImage.height + 70);
-  ctx.fillText(`Item Name: ${itemName}`, canvasWidth / 2, barcodeImage.height + 95);
+  ctx.font = '30px Arial';
+  ctx.fillText(`ID No: ${barcodeId}`, canvasWidth / 2, barcodeImage.height + 50);
+  ctx.fillText(`Item Name: ${itemName}`, canvasWidth / 2, barcodeImage.height + 75);
 
     return canvas.toBuffer('image/png');
   } catch (error) {

@@ -8,10 +8,26 @@ function formatDate(date) {
   return `${day}/${month}/${year}`;
 }
 
+// Helper function to format date for HTML5 date input (YYYY-MM-DD)
+function formatDateForInput(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Helper function to convert YYYY-MM-DD back to Date object for API
+function convertToApiDate(dateString) {
+  if (!dateString) return new Date();
+  return new Date(dateString);
+}
+
 const SaleForm = ({ initialData, buyers, products, onSubmit, onCancel, loading }) => {
   const [formData, setFormData] = useState(() => ({
     buyer: initialData?.buyer?._id || initialData?.buyer || '',
-    saleDate: initialData?.saleDate ? formatDate(initialData.saleDate) : formatDate(new Date()),
+    saleDate: initialData?.saleDate ? formatDateForInput(initialData.saleDate) : formatDateForInput(new Date()),
     items: initialData?.items?.map(item => ({
       product: item.product?._id || item.product || '',
       productData: item.product || item.productData || {},
@@ -102,6 +118,7 @@ const SaleForm = ({ initialData, buyers, products, onSubmit, onCancel, loading }
     // Prepare data for API
     const formatted = {
       ...formData,
+      saleDate: convertToApiDate(formData.saleDate), // Convert date to proper format
       items: formData.items.map(item => ({
         product: item.product,
         quantity: item.quantity,
@@ -135,12 +152,11 @@ const SaleForm = ({ initialData, buyers, products, onSubmit, onCancel, loading }
           <FormGroup className="mb-3">
             <Form.Label>Sale Date</Form.Label>
               <Form.Control
-                type="text"
+                type="date"
                 name="saleDate"
                 value={formData.saleDate}
                 onChange={e => handleInputChange('saleDate', e.target.value)}
                 required
-                placeholder="DD/MM/YYYY"
               />
           </FormGroup>
         </Col>
@@ -284,7 +300,9 @@ import {
   Col,
   ListGroup,
   Spinner,
-  Badge
+  Badge,
+  Toast,
+  ToastContainer
 } from "react-bootstrap";
 import { salesAPI, buyersAPI, productsAPI, barcodesAPI } from "../services/api";
 import Quagga from "quagga";
@@ -1075,6 +1093,52 @@ const TableRow = styled.tr`
   }
 `;
 
+// Toast Container for top-right notifications
+const StyledToastContainer = styled(ToastContainer)`
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  
+  .toast {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(10px);
+    margin-bottom: 10px;
+    
+    &.bg-success {
+      background: linear-gradient(135deg, #28a745, #20c997) !important;
+      color: white;
+    }
+    
+    &.bg-danger {
+      background: linear-gradient(135deg, #dc3545, #e83e8c) !important;
+      color: white;
+    }
+    
+    &.bg-warning {
+      background: linear-gradient(135deg, #ffc107, #fd7e14) !important;
+      color: #212529;
+    }
+    
+    .toast-header {
+      background: transparent;
+      border: none;
+      color: inherit;
+      font-weight: 600;
+      
+      .btn-close {
+        filter: ${props => props.variant === 'success' || props.variant === 'danger' ? 'invert(1)' : 'none'};
+      }
+    }
+    
+    .toast-body {
+      font-weight: 500;
+      padding: 0.75rem 1rem;
+    }
+  }
+`;
 
 //logic
 const Sales = () => {
@@ -1145,11 +1209,11 @@ const Sales = () => {
     try {
       setLoading(true);
       await salesAPI.update(editSaleData._id, updatedData);
-      setSuccess('Sale updated successfully');
+      showSuccess('Sale updated successfully');
       setShowEditModal(false);
       fetchSales();
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to update sale');
+      showError(error.response?.data?.message || 'Failed to update sale');
     } finally {
       setLoading(false);
     }
@@ -1160,10 +1224,10 @@ const Sales = () => {
     try {
       setLoading(true);
       await salesAPI.delete(saleId);
-      setSuccess('Sale deleted and product quantities restored');
+      showSuccess('Sale deleted and product quantities restored');
       fetchSales();
     } catch (error) {
-      setError(error.response?.data?.message || 'Failed to delete sale');
+      showError(error.response?.data?.message || 'Failed to delete sale');
     } finally {
       setLoading(false);
     }
@@ -1178,6 +1242,7 @@ const Sales = () => {
   const [selectedSale, setSelectedSale] = useState(null);
   const [scannerActive, setScannerActive] = useState(false);
   const [scannedCode, setScannedCode] = useState("");
+  const [barcodeMode, setBarcodeMode] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1186,12 +1251,16 @@ const Sales = () => {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
 
+  // Toast notifications state
+  const [toasts, setToasts] = useState([]);
+
   const scannerRef = useRef(null);
+  const barcodeInputRef = useRef(null);
 
   // Initialize formData with all required fields
   const [formData, setFormData] = useState({
     buyer: "",
-    saleDate: formatDate(new Date()),
+    saleDate: formatDateForInput(new Date()),
     items: [],
     subtotal: 0,
     discount: 0,
@@ -1216,7 +1285,7 @@ const Sales = () => {
     try {
       await Promise.all([fetchSales(), fetchBuyers(), fetchProducts()]);
     } catch (error) {
-      setError('Failed to fetch data');
+      showError('Failed to fetch data');
     } finally {
       setLoading(false);
     }
@@ -1238,7 +1307,7 @@ const Sales = () => {
       setSales(formattedSales);
     } catch (error) {
       console.error("Failed to fetch sales:", error);
-      setError("Failed to fetch sales data");
+      showError("Failed to fetch sales data");
       setSales([]);
     }
   };
@@ -1265,7 +1334,7 @@ const Sales = () => {
     setShowModal(true);
     setFormData({
       buyer: "",
-      saleDate: formatDate(new Date()),
+      saleDate: formatDateForInput(new Date()),
       items: [],
       subtotal: 0,
       discount: 0,
@@ -1277,14 +1346,11 @@ const Sales = () => {
       total: 0,
       comments: ""
     });
-    setError("");
-    setSuccess("");
   };
 
   const handleCloseModal = () => {
     setShowModal(false);
     stopScanner();
-    setError(""); // Clear any error messages when closing modal
   };
 
   // Updated handleInputChange to handle calculations
@@ -1351,7 +1417,7 @@ const Sales = () => {
         },
         (err) => {
           if (err) {
-            setError("Unable to start scanner: " + err);
+            showError("Unable to start scanner: " + err);
             return;
           }
           Quagga.start();
@@ -1375,199 +1441,94 @@ const Sales = () => {
     } catch { }
   };
 
-  // Add Item (auto on scan)
-  useEffect(() => {
-    const addScannedItem = async () => {
-      if (!scannedCode) return;
-      try {
-        // First, try to get product directly from products using the barcode
-        const productMatch = products.find(p => p.barcode === scannedCode);
-        
-        if (productMatch) {
-          // We found a matching product in our already fetched products
-          const enhancedProduct = {
-            _id: productMatch._id,
-            name: productMatch.name,
-            category: productMatch.category || 'Unknown',
-            description: productMatch.description || '',
-            currentStock: productMatch.quantity || 0,
-            minStock: productMatch.minquantity || 0,
-            price: productMatch.price
-          };
-          
-          // Check if this product is at or below minimum stock level
-          if (productMatch.quantity <= productMatch.minquantity) {
-            setLowStockAlert({
-              productName: productMatch.name,
-              currentStock: productMatch.quantity,
-              minStock: productMatch.minquantity
-            });
-            
-            // Auto-dismiss low stock alert after 5 seconds
-            setTimeout(() => {
-              setLowStockAlert(null);
-            }, 5000);
-          }
-          
-          setFormData((prev) => {
-            // Check if this barcode already exists in items
-            const existingItemIndex = prev.items.findIndex(item => item.barcode === scannedCode);
-            
-            let newItems = [...prev.items];
-            
-            if (existingItemIndex !== -1) {
-              // Increment quantity of existing item
-              newItems[existingItemIndex] = {
-                ...newItems[existingItemIndex],
-                quantity: (newItems[existingItemIndex].quantity || 1) + 1
-              };
-            } else {
-              // Add new item with enhanced product details
-              newItems.push({
-                product: enhancedProduct._id,
-                productData: enhancedProduct,
-                quantity: 1,
-                unitPrice: enhancedProduct.price,
-                barcode: scannedCode,
-              });
-            }
-            
-            // Recalculate totals with new items
-            return calculateTotals({
-              ...prev,
-              items: newItems
-            });
-          });
-          
-          setScannedCode("");
-          setError("");
-        } else {
-          // If not found in cached products, try to fetch the product by barcode
-          try {
-            const productResponse = await productsAPI.getByBarcode(scannedCode);
-            if (productResponse.data) {
-              const productDetails = productResponse.data;
-              
-              // Create enhanced product object
-              const enhancedProduct = {
-                _id: productDetails._id,
-                name: productDetails.name || 'Unknown Product',
-                category: productDetails.category || 'Unknown',
-                description: productDetails.description || '',
-                currentStock: productDetails.quantity || 0,
-                minStock: productDetails.minquantity || 0,
-                price: productDetails.price
-              };
-              
-              // Check for low stock
-              if (productDetails.quantity <= productDetails.minquantity) {
-                setLowStockAlert({
-                  productName: enhancedProduct.name,
-                  currentStock: productDetails.quantity,
-                  minStock: productDetails.minquantity
-                });
-                
-                setTimeout(() => {
-                  setLowStockAlert(null);
-                }, 5000);
-              }
-              
-              setFormData((prev) => {
-                // Check if this barcode already exists in items
-                const existingItemIndex = prev.items.findIndex(item => item.barcode === scannedCode);
-                
-                let newItems = [...prev.items];
-                
-                if (existingItemIndex !== -1) {
-                  // Increment quantity of existing item
-                  newItems[existingItemIndex] = {
-                    ...newItems[existingItemIndex],
-                    quantity: (newItems[existingItemIndex].quantity || 1) + 1
-                  };
-                } else {
-                  // Add new item with enhanced product details
-                  newItems.push({
-                    product: enhancedProduct._id,
-                    productData: enhancedProduct,
-                    quantity: 1,
-                    unitPrice: enhancedProduct.price,
-                    barcode: scannedCode,
-                  });
-                }
-                
-                // Recalculate totals with new items
-                return calculateTotals({
-                  ...prev,
-                  items: newItems
-                });
-              });
-              
-              setScannedCode("");
-              setError("");
-            } else {
-              // If product not found by barcode, fall back to the sales API scan endpoint
-              fallbackToSalesAPI();
-            }
-          } catch (err) {
-            // If there's an error getting product by barcode, fall back to sales API
-            fallbackToSalesAPI();
-          }
-        }
-        
-        // Stop and restart scanner to prevent duplicate scans
-        stopScanner();
-        setTimeout(() => {
-          startScanner();
-        }, 2000); // short delay to allow camera to reset
-      } catch (error) {
-        setError(`Invalid or sold barcode: ${scannedCode}`);
-        setScannedCode(""); // Clear the code after error
-        
-        // Auto-dismiss error after 3 seconds
-        setTimeout(() => {
-          setError("");
-        }, 3000);
-      }
+  // Toast notification helpers
+  const showToast = (message, variant = 'success', title = '') => {
+    const id = Date.now();
+    const toast = {
+      id,
+      message,
+      variant,
+      title: title || (variant === 'success' ? 'Success' : variant === 'danger' ? 'Error' : 'Warning'),
+      show: true
     };
     
-    // Helper function to use the sales API as fallback
-    const fallbackToSalesAPI = async () => {
-      try {
-        const response = await salesAPI.scanBarcode({ barcode: scannedCode });
-        const scannedItem = response.data;
-        
-        // Get more detailed product info if available
-        let productDetails = null;
-        try {
-          if (scannedItem && scannedItem.product && scannedItem.product._id) {
-            const productResponse = await productsAPI.getById(scannedItem.product._id);
-            productDetails = productResponse.data;
+    setToasts(prev => [...prev, toast]);
+    
+    // Auto dismiss after 5 seconds
+    setTimeout(() => {
+      removeToast(id);
+    }, 5000);
+  };
+
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  const showSuccess = (message) => {
+    showToast(message, 'success', 'Success');
+  };
+
+  const showError = (message) => {
+    showToast(message, 'danger', 'Error');
+  };
+
+  const showWarning = (message) => {
+    showToast(message, 'warning', 'Warning');
+  };
+
+  // Toggle barcode mode
+  const toggleBarcodeMode = () => {
+    setBarcodeMode(prev => {
+      const newMode = !prev;
+      if (newMode) {
+        // Focus the input when enabling barcode mode
+        setTimeout(() => {
+          if (barcodeInputRef.current) {
+            barcodeInputRef.current.focus();
           }
-        } catch (productError) {
-          console.error("Failed to fetch detailed product info:", productError);
-        }
-        
-        // Combine the product data from the scan response with our additional product details
+        }, 100);
+      } else {
+        // Clear the input when disabling barcode mode
+        setScannedCode("");
+      }
+      return newMode;
+    });
+  };
+
+  // Manual barcode add function
+  const addBarcodeManually = async () => {
+    if (!scannedCode || !barcodeMode) return;
+    
+    try {
+      await addScannedItem();
+      setScannedCode(""); // Clear after manual addition
+    } catch (error) {
+      console.error("Error adding barcode manually:", error);
+    }
+  };
+
+  // Extract addScannedItem function to be reusable
+  const addScannedItem = async () => {
+    if (!scannedCode) return;
+    try {
+      // First, try to get product directly from products using the barcode
+      const productMatch = products.find(p => p.barcode === scannedCode);
+      
+      if (productMatch) {
+        // We found a matching product in our already fetched products
         const enhancedProduct = {
-          ...scannedItem.product,
-          name: productDetails?.name || scannedItem.product?.name || 'Unknown Product',
-          category: productDetails?.category || scannedItem.product?.category || 'Unknown',
-          description: productDetails?.description || scannedItem.product?.description || '',
-          currentStock: productDetails?.quantity || 0,
-          minStock: productDetails?.minquantity || 0
+          _id: productMatch._id,
+          name: productMatch.name,
+          category: productMatch.category || 'Unknown',
+          description: productMatch.description || '',
+          currentStock: productMatch.quantity || 0,
+          minStock: productMatch.minquantity || 0,
+          price: productMatch.price
         };
         
-        // Check for low stock
-        if (productDetails && productDetails.quantity <= productDetails.minquantity) {
-          setLowStockAlert({
-            productName: enhancedProduct.name,
-            currentStock: productDetails.quantity,
-            minStock: productDetails.minquantity
-          });
-          
-          setTimeout(() => {
-            setLowStockAlert(null);
-          }, 5000);
+        // Check if this product is at or below minimum stock level
+        if (productMatch.quantity <= productMatch.minquantity) {
+          showWarning(`Low Stock Alert: ${productMatch.name} has reached minimum stock level. Current: ${productMatch.quantity}, Minimum: ${productMatch.minquantity}`);
         }
         
         setFormData((prev) => {
@@ -1585,10 +1546,10 @@ const Sales = () => {
           } else {
             // Add new item with enhanced product details
             newItems.push({
-              product: enhancedProduct._id, // Store just the ID for submission
-              productData: enhancedProduct, // Store full object for display
+              product: enhancedProduct._id,
+              productData: enhancedProduct,
               quantity: 1,
-              unitPrice: scannedItem.price,
+              unitPrice: enhancedProduct.price,
               barcode: scannedCode,
             });
           }
@@ -1601,22 +1562,179 @@ const Sales = () => {
         });
         
         setScannedCode("");
-        setError(""); // Clear any previous errors
-      } catch (error) {
-        setError(`Invalid or sold barcode: ${scannedCode}`);
-        setScannedCode(""); // Clear the code after error
-        
-        // Auto-dismiss error after 3 seconds
-        setTimeout(() => {
-          setError("");
-        }, 3000);
+        setError("");
+      } else {
+        // If not found in cached products, try to fetch the product by barcode
+        try {
+          const productResponse = await productsAPI.getByBarcode(scannedCode);
+          if (productResponse.data) {
+            const productDetails = productResponse.data;
+            
+            // Create enhanced product object
+            const enhancedProduct = {
+              _id: productDetails._id,
+              name: productDetails.name || 'Unknown Product',
+              category: productDetails.category || 'Unknown',
+              description: productDetails.description || '',
+              currentStock: productDetails.quantity || 0,
+              minStock: productDetails.minquantity || 0,
+              price: productDetails.price
+            };
+            
+            // Check for low stock
+            if (productDetails.quantity <= productDetails.minquantity) {
+              showWarning(`Low Stock Alert: ${enhancedProduct.name} has reached minimum stock level. Current: ${productDetails.quantity}, Minimum: ${productDetails.minquantity}`);
+            }
+            
+            setFormData((prev) => {
+              // Check if this barcode already exists in items
+              const existingItemIndex = prev.items.findIndex(item => item.barcode === scannedCode);
+              
+              let newItems = [...prev.items];
+              
+              if (existingItemIndex !== -1) {
+                // Increment quantity of existing item
+                newItems[existingItemIndex] = {
+                  ...newItems[existingItemIndex],
+                  quantity: (newItems[existingItemIndex].quantity || 1) + 1
+                };
+              } else {
+                // Add new item with enhanced product details
+                newItems.push({
+                  product: enhancedProduct._id,
+                  productData: enhancedProduct,
+                  quantity: 1,
+                  unitPrice: enhancedProduct.price,
+                  barcode: scannedCode,
+                });
+              }
+              
+              // Recalculate totals with new items
+              return calculateTotals({
+                ...prev,
+                items: newItems
+              });
+            });
+            
+            setScannedCode("");
+            setError("");
+          } else {
+            // If product not found by barcode, fall back to the sales API scan endpoint
+            await fallbackToSalesAPI();
+          }
+        } catch (err) {
+          // If there's an error getting product by barcode, fall back to sales API
+          await fallbackToSalesAPI();
+        }
       }
-    };
+      
+      // Only stop and restart scanner if it was already active
+      if (scannerActive) {
+        stopScanner();
+        setTimeout(() => {
+          startScanner();
+        }, 1000); // short delay to allow camera to reset
+      }
+    } catch (error) {
+      showError(`Invalid or sold barcode: ${scannedCode}`);
+      setScannedCode(""); // Clear the code after error
+    }
+  };
+
+  // Helper function to use the sales API as fallback
+  const fallbackToSalesAPI = async () => {
+    try {
+      const response = await salesAPI.scanBarcode({ barcode: scannedCode });
+      const scannedItem = response.data;
+      
+      // Get more detailed product info if available
+      let productDetails = null;
+      try {
+        if (scannedItem && scannedItem.product && scannedItem.product._id) {
+          const productResponse = await productsAPI.getById(scannedItem.product._id);
+          productDetails = productResponse.data;
+        }
+      } catch (productError) {
+        console.error("Failed to fetch detailed product info:", productError);
+      }
+      
+      // Combine the product data from the scan response with our additional product details
+      const enhancedProduct = {
+        ...scannedItem.product,
+        name: productDetails?.name || scannedItem.product?.name || 'Unknown Product',
+        category: productDetails?.category || scannedItem.product?.category || 'Unknown',
+        description: productDetails?.description || scannedItem.product?.description || '',
+        currentStock: productDetails?.quantity || 0,
+        minStock: productDetails?.minquantity || 0
+      };
+      
+      // Check for low stock
+      if (productDetails && productDetails.quantity <= productDetails.minquantity) {
+        setLowStockAlert({
+          productName: enhancedProduct.name,
+          currentStock: productDetails.quantity,
+          minStock: productDetails.minquantity
+        });
+        
+        setTimeout(() => {
+          setLowStockAlert(null);
+        }, 5000);
+      }
+      
+      setFormData((prev) => {
+        // Check if this barcode already exists in items
+        const existingItemIndex = prev.items.findIndex(item => item.barcode === scannedCode);
+        
+        let newItems = [...prev.items];
+        
+        if (existingItemIndex !== -1) {
+          // Increment quantity of existing item
+          newItems[existingItemIndex] = {
+            ...newItems[existingItemIndex],
+            quantity: (newItems[existingItemIndex].quantity || 1) + 1
+          };
+        } else {
+          // Add new item with enhanced product details
+          newItems.push({
+            product: enhancedProduct._id, // Store just the ID for submission
+            productData: enhancedProduct, // Store full object for display
+            quantity: 1,
+            unitPrice: scannedItem.price,
+            barcode: scannedCode,
+          });
+        }
+        
+        // Recalculate totals with new items
+        return calculateTotals({
+          ...prev,
+          items: newItems
+        });
+      });
+      
+      setScannedCode("");
+      setError("");
+      setSuccess("");
+    } catch (error) {
+      throw error; // Re-throw to be caught by parent function
+    }
+  };
+
+  // Add Item (auto on scan) - only when NOT in barcode mode
+  useEffect(() => {
+    // Only auto-add when NOT in barcode mode
+    if (!scannedCode || barcodeMode) return;
     
     addScannedItem();
-    // Only run when scannedCode changes
+    // Only run when scannedCode changes and not in barcode mode
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scannedCode]);
+  }, [scannedCode, barcodeMode]);
+
+  // Focus barcode input when barcode mode is enabled
+  useEffect(() => {
+    if (barcodeMode && barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
+    }
+  }, [barcodeMode]);
 
   const removeItem = (index) => {
     const item = formData.items[index];
@@ -1682,11 +1800,7 @@ const Sales = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.buyer || formData.items.length === 0) {
-      setError("Buyer and at least one item are required");
-      // Auto-dismiss validation error after 3 seconds
-      setTimeout(() => {
-        setError("");
-      }, 3000);
+      showError("Buyer and at least one item are required");
       return;
     }
 
@@ -1696,6 +1810,7 @@ const Sales = () => {
       // Create a properly formatted object for the API
       const formattedData = {
         ...formData,
+        saleDate: convertToApiDate(formData.saleDate), // Convert date to proper format
         // Map items to the format expected by the API
         items: formData.items.map(item => ({
           product: item.product, // Just send the ID
@@ -1706,16 +1821,11 @@ const Sales = () => {
       };
       
       await salesAPI.create(formattedData);
-      setSuccess("Sale created successfully");
-      // Auto-dismiss success message after 3 seconds
-      setTimeout(() => {
-        setSuccess("");
-      }, 3000);
+      showSuccess("Sale created successfully");
       fetchSales();
       handleCloseModal();
     } catch (error) {
-      setError(error.response?.data?.message || "Failed to create sale");
-      // Auto-dismiss error after 3 seconds
+      showError(error.response?.data?.message || "Failed to create sale");
       setTimeout(() => {
         setError("");
       }, 3000);
@@ -1925,7 +2035,23 @@ const Sales = () => {
           </Row>
         </HeaderSection>
 
-        {success && <Alert variant="success">{success}</Alert>}
+        {/* Toast Notifications */}
+        <StyledToastContainer position="top-end">
+          {toasts.map(toast => (
+            <Toast 
+              key={toast.id}
+              show={toast.show}
+              onClose={() => removeToast(toast.id)}
+              bg={toast.variant}
+              text={toast.variant === 'warning' ? 'dark' : 'white'}
+            >
+              <Toast.Header>
+                <strong className="me-auto">{toast.title}</strong>
+              </Toast.Header>
+              <Toast.Body>{toast.message}</Toast.Body>
+            </Toast>
+          ))}
+        </StyledToastContainer>
 
         <StyledTable responsive hover>
           <thead>
@@ -2093,12 +2219,11 @@ const Sales = () => {
                   <FormGroup className="mb-3">
                     <Form.Label>Sale Date</Form.Label>
                     <Form.Control
-                      type="text"
+                      type="date"
                       name="saleDate"
                       value={formData.saleDate}
                       onChange={(e) => handleInputChange("saleDate", e.target.value)}
                       required
-                      placeholder="DD/MM/YYYY"
                     />
                   </FormGroup>
                 </Col>
@@ -2110,28 +2235,7 @@ const Sales = () => {
                 <ScannerStatus $active={scannerActive} className="mb-2">
                   {scannerActive ? '🟢 Scanner Active' : '🔴 Scanner Inactive'}
                 </ScannerStatus>
-
-                {error && (
-                  <Alert 
-                    variant="danger" 
-                    className="py-2 mb-2"
-                  >
-                    {error}
-                  </Alert>
-                )}
                 
-                {lowStockAlert && (
-                  <LowStockAlert className="py-2 mb-2">
-                    <div className="d-flex align-items-center">
-                      <span className="me-2">⚠️</span>
-                      <div>
-                        <strong>Low Stock Alert:</strong> {lowStockAlert.productName} has reached the minimum stock level. 
-                        <div><small>Current stock: {lowStockAlert.currentStock}, Minimum: {lowStockAlert.minStock}</small></div>
-                      </div>
-                    </div>
-                  </LowStockAlert>
-                )}
-
                 <ScannerContainer ref={scannerRef} style={{marginBottom: '0.5rem'}} />
 
                 <div className="d-flex gap-2 mb-2">
@@ -2147,12 +2251,43 @@ const Sales = () => {
                 {/* Barcode Input */}
                 <FormGroup className="mb-3">
                   <Form.Label>Scanned Barcode</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={scannedCode}
-                    onChange={(e) => setScannedCode(e.target.value)}
-                    placeholder="Scan or enter barcode"
-                  />
+                  <div className="d-flex gap-2">
+                    <Form.Control
+                      ref={barcodeInputRef}
+                      type="text"
+                      value={scannedCode}
+                      onChange={(e) => setScannedCode(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault(); // Prevent form submission
+                          if (barcodeMode && scannedCode.trim()) {
+                            addBarcodeManually();
+                          }
+                        }
+                      }}
+                      placeholder={barcodeMode ? "Barcode mode active - scan or enter barcode" : "Enter barcode manually"}
+                      disabled={!barcodeMode}
+                    />
+                    <SecondaryButton 
+                      onClick={toggleBarcodeMode}
+                      variant={barcodeMode ? "success" : "outline-primary"}
+                    >
+                      {barcodeMode ? '✓ Barcode Active' : '📊 Enable Barcode'}
+                    </SecondaryButton>
+                    {barcodeMode && scannedCode && (
+                      <PrimaryButton 
+                        onClick={addBarcodeManually}
+                        variant="primary"
+                      >
+                        ➕ Add Item
+                      </PrimaryButton>
+                    )}
+                  </div>
+                  {barcodeMode && (
+                    <small className="text-muted mt-1 d-block">
+                      📍 Barcode mode is active. Scan barcode or press Enter to add items automatically.
+                    </small>
+                  )}
                 </FormGroup>
               </div>
 
