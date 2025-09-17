@@ -39,14 +39,16 @@ exports.createProduct = async (req, res) => {
   try {
     const BarcodeCounter = require('../models/BarcodeCounter');
     const prefix = 'IM001VP';
-    const counter = await BarcodeCounter.findOneAndUpdate(
-      { prefix },
-      { $inc: { seq: 1 } },
-      { new: true, upsert: true }
-    );
+    const lastProduct = await Product.findOne({ barcode: new RegExp(`^${prefix}`) })
+      .sort({ barcode: -1 });
 
-    const nextNumber = counter.seq;
-    const barcode = `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+    let nextNumber = 1;
+    if (lastProduct && lastProduct.barcode) {
+      const match = lastProduct.barcode.match(/\d+$/);
+      if (match) {
+        nextNumber = parseInt(match[0], 10) + 1;
+      }
+    }const barcode = `${prefix}${nextNumber.toString().padStart(4, '0')}`;
 
     // Upload image if provided
     let imageUrl = null;
