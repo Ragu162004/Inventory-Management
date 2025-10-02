@@ -24,10 +24,10 @@ function PurchaseOrder({ vendors = [], items = [] }) {
     const [selectedVendorId, setSelectedVendorId] = useState("");
     const [selectedItemId, setSelectedItemId] = useState("");
     const [formData, setFormData] = useState({
-        companyName: "VelpaariEnterprises",
-        streetAddress: "5/3 ,32b Pasumai nagar, Thiruchengode main road, Alampalayam(po)",
+        companyName: "Velpaari Enterprises",
+        streetAddress: "5/3 ,32b Pasumai nagar, Thiruchengode main road, Alampalayam (po)",
         cityStateZip: " Erode-638008",
-        phone: "9500791500",
+        phone: "+91 9500791500",
         date: new Date().toLocaleDateString(),
         poNumber: "",
         vendorCompany: "",
@@ -42,7 +42,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
         shipToCompany: "VELPAARI ENTERPRISES",
         shipToAddress: "5/3 ,32b Pasumai nagar, Thiruchengode main road, Alampalayam(po)",
         shipToCityStateZip: "Erode-638008",
-        shipToPhone: "9500791500",
+        shipToPhone: "+91 9500791500",
         items: [],
         subtotal: 0,
         tax: 0,
