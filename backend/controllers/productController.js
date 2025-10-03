@@ -84,11 +84,47 @@ exports.createProduct = async (req, res) => {
 // Update product
 exports.updateProduct = async (req, res) => {
   try {
+    // Get the existing product first
+    const existingProduct = await Product.findById(req.params.id);
+    if (!existingProduct) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
     let updateData = { ...req.body };
+    
+    // Handle image deletion
+    if (req.body.deleteImage === 'true' && existingProduct.image) {
+      try {
+        // Extract public_id from Cloudinary URL
+        const urlParts = existingProduct.image.split('/');
+        const filename = urlParts[urlParts.length - 1];
+        const publicId = `inventory-products/${filename.split('.')[0]}`;
+        
+        await cloudinary.uploader.destroy(publicId);
+        updateData.image = null;
+      } catch (cloudinaryError) {
+        console.error('Failed to delete old image from Cloudinary:', cloudinaryError);
+        // Continue with update even if image deletion fails
+      }
+    }
     
     // Upload new image if provided
     if (req.file) {
       try {
+        // Delete old image from Cloudinary if it exists
+        if (existingProduct.image) {
+          try {
+            const urlParts = existingProduct.image.split('/');
+            const filename = urlParts[urlParts.length - 1];
+            const publicId = `inventory-products/${filename.split('.')[0]}`;
+            
+            await cloudinary.uploader.destroy(publicId);
+          } catch (cloudinaryError) {
+            console.error('Failed to delete old image from Cloudinary:', cloudinaryError);
+            // Continue with new image upload even if old image deletion fails
+          }
+        }
+
         // Convert buffer to base64 string for Cloudinary upload
         const fileStr = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
         
@@ -107,14 +143,15 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
+    // Remove deleteImage flag from updateData as it's not a model field
+    delete updateData.deleteImage;
+
     const product = await Product.findByIdAndUpdate(
       req.params.id,
       updateData,
       { new: true, runValidators: true }
     );
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
+    
     res.json(product);
   } catch (error) {
     res.status(400).json({ message: error.message });
