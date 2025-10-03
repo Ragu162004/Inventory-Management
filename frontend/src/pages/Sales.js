@@ -365,6 +365,8 @@ const PrintStyles = createGlobalStyle`
       padding: 0 !important;
       background: white !important;
       margin: 0 !important;
+      display: block !important;
+      visibility: visible !important;
     }
     
     @page {
@@ -386,6 +388,8 @@ const PrintStyles = createGlobalStyle`
       page-break-after: avoid;
       -webkit-print-color-adjust: exact !important;
       color-adjust: exact !important;
+      display: block !important;
+      visibility: visible !important;
     }
     
     /* Force colors to print */
@@ -752,42 +756,28 @@ const InvoiceHeader = styled.div`
   margin-bottom: 1.5rem;
   border-bottom: 3px solid #3498db;
   padding-bottom: 1rem;
+  width: 100%;
   
   @media print {
     border-bottom: 3px solid #3498db !important;
     -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
+    print-color-adjust: exact !important;
     margin-bottom: 1rem !important;
     padding-bottom: 0.8rem !important;
-  }
-  
-  h1 {
-    color: #3498db;
-    font-size: 2rem;
-    margin-bottom: 0.3rem;
-    font-weight: bold;
+    width: 100% !important;
     
-    @media print {
-      color: #3498db !important;
-      font-size: 24pt !important;
-      margin-bottom: 0.2rem !important;
+    * {
       -webkit-print-color-adjust: exact !important;
       color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      display: block !important;
+      visibility: visible !important;
     }
-  }
-  
-  h2 {
-    color: #666;
-    font-size: 1rem;
-    margin: 0;
-    font-weight: normal;
     
-    @media print {
-      color: #666 !important;
-      font-size: 14pt !important;
-      margin: 0 !important;
-      -webkit-print-color-adjust: exact !important;
-      color-adjust: exact !important;
+    div {
+      display: flex !important;
+      visibility: visible !important;
     }
   }
 `;
@@ -1994,10 +1984,20 @@ const Sales = () => {
   };
 
   const handlePrintInvoice = () => {
-    // Add a delay to ensure styles are applied
-    setTimeout(() => {
-      window.print();
-    }, 100);
+    // Ensure logo image is loaded before printing
+    const logoImg = document.querySelector('.company-logo-img');
+    if (logoImg && !logoImg.complete) {
+      logoImg.onload = () => {
+        setTimeout(() => {
+          window.print();
+        }, 500);
+      };
+    } else {
+      // Add a delay to ensure styles are applied
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
   };
 
   if (loading && sales.length === 0) {
@@ -2631,8 +2631,35 @@ const Sales = () => {
             {invoiceData && (
               <InvoiceContainer>
                 <InvoiceHeader>
-                  <h1>VELPAARI ENTERPRISES</h1>
-                  <h2>Sales Invoice</h2>
+                  <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', width: '100%'}}>
+                    <img 
+                      src="/logo_vp.jpeg" 
+                      alt="Velpaari Enterprises Logo" 
+                      style={{
+                        width: '60px',
+                        height: '60px',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                        border: '2px solid #2980b9'
+                      }}
+                      onError={(e) => {
+                        console.log('Logo failed to load');
+                        e.target.style.display='none';
+                      }}
+                      onLoad={(e) => {
+                        console.log('Logo loaded successfully');
+                      }}
+                      crossOrigin="anonymous"
+                    />
+                    <div style={{textAlign: 'center', flex: '1'}}>
+                      <div style={{color: '#3498db', fontSize: '28px', fontWeight: 'bold', margin: '0', lineHeight: '1.2'}}>
+                        VELPAARI ENTERPRISES
+                      </div>
+                      <div style={{color: '#666', fontSize: '16px', margin: '5px 0 0 0', fontWeight: 'normal'}}>
+                        Sales Invoice
+                      </div>
+                    </div>
+                  </div>
                 </InvoiceHeader>
 
                 <InvoiceDetails>
