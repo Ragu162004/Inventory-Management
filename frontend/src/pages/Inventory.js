@@ -347,6 +347,25 @@ const Inventory = () => {
   const [lowStock, setLowStock] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  
+  // Column visibility states
+  const [lowStockColumns, setLowStockColumns] = useState({
+    product: true,
+    currentStock: true,
+    status: true,
+    vendor: true
+  });
+  
+  const [productColumns, setProductColumns] = useState({
+    name: true,
+    id: true,
+    category: true,
+    stockLevel: true,
+    price: true,
+    total: true,
+    vendor: true,
+    status: true
+  });
 
   useEffect(() => {
     fetchInventory();
@@ -396,6 +415,20 @@ const Inventory = () => {
     }).format(amount);
   };
 
+  const toggleLowStockColumn = (column) => {
+    setLowStockColumns(prev => ({
+      ...prev,
+      [column]: !prev[column]
+    }));
+  };
+
+  const toggleProductColumn = (column) => {
+    setProductColumns(prev => ({
+      ...prev,
+      [column]: !prev[column]
+    }));
+  };
+
   if (loading) {
     return (
       <PageContainer>
@@ -436,49 +469,85 @@ const Inventory = () => {
           <StyledTable>
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Current Stock</th>
-                <th>Status</th>
-                <th>Vendor</th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={lowStockColumns.product} 
+                    onChange={() => toggleLowStockColumn('product')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Product
+                </th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={lowStockColumns.currentStock} 
+                    onChange={() => toggleLowStockColumn('currentStock')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Current Stock
+                </th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={lowStockColumns.status} 
+                    onChange={() => toggleLowStockColumn('status')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Status
+                </th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={lowStockColumns.vendor} 
+                    onChange={() => toggleLowStockColumn('vendor')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Vendor
+                </th>
               </tr>
             </thead>
             <tbody>
               {lowStock.map(product => (
                 <tr key={product._id}>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        background: 'linear-gradient(135deg, #3498db, #2980b9)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'white',
-                        fontSize: '0.8rem',
-                        fontWeight: 'bold'
-                      }}>
-                        {product.name.charAt(0)}
+                    {lowStockColumns.product ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          background: 'linear-gradient(135deg, #3498db, #2980b9)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          fontSize: '0.8rem',
+                          fontWeight: 'bold'
+                        }}>
+                          {product.name.charAt(0)}
+                        </div>
+                        {product.name}
                       </div>
-                      {product.name}
-                    </div>
+                    ) : (
+                      <span style={{ color: '#ccc' }}>---</span>
+                    )}
                   </td>
-                  <td>{product.quantity}</td>
                   <td>
-                    <StatusBadge variant={getStockStatus(product.quantity, product.reorderLevel)}>
-                      {getStockStatusText(product.quantity, product.reorderLevel)}
-                    </StatusBadge>
+                    {lowStockColumns.currentStock ? product.quantity : <span style={{ color: '#ccc' }}>---</span>}
                   </td>
-                  <td>{product.vendor?.name || 'N/A'}</td>
-                {/*<ActionCell>
-                  <IconButton variant="edit" title="Edit Product">
-                    <i className="bi bi-pencil"></i>
-                  </IconButton>
-                  <IconButton variant="danger" title="Reorder Product">
-                    <i className="bi bi-cart-plus"></i>
-                  </IconButton>
-                </ActionCell>*/}
+                  <td>
+                    {lowStockColumns.status ? (
+                      <StatusBadge variant={getStockStatus(product.quantity, product.reorderLevel)}>
+                        {getStockStatusText(product.quantity, product.reorderLevel)}
+                      </StatusBadge>
+                    ) : (
+                      <span style={{ color: '#ccc' }}>---</span>
+                    )}
+                  </td>
+                  <td>
+                    {lowStockColumns.vendor ? (product.vendor?.name || 'N/A') : <span style={{ color: '#ccc' }}>---</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -507,58 +576,144 @@ const Inventory = () => {
           <StyledTable>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>ID</th>
-                <th>Category</th>
-                <th>Stock Level</th>
-                <th>Price</th>
-                <th>Total</th>
-                <th>Vendor</th>
-                <th>Status</th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={productColumns.name} 
+                    onChange={() => toggleProductColumn('name')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Name
+                </th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={productColumns.id} 
+                    onChange={() => toggleProductColumn('id')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  ID
+                </th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={productColumns.category} 
+                    onChange={() => toggleProductColumn('category')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Category
+                </th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={productColumns.stockLevel} 
+                    onChange={() => toggleProductColumn('stockLevel')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Stock Level
+                </th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={productColumns.price} 
+                    onChange={() => toggleProductColumn('price')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Price
+                </th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={productColumns.total} 
+                    onChange={() => toggleProductColumn('total')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Total
+                </th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={productColumns.vendor} 
+                    onChange={() => toggleProductColumn('vendor')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Vendor
+                </th>
+                <th>
+                  <input 
+                    type="checkbox" 
+                    checked={productColumns.status} 
+                    onChange={() => toggleProductColumn('status')}
+                    style={{ marginRight: '0.5rem', transform: 'scale(1.1)' }}
+                  />
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody>
               {products.map(product => (
                 <tr key={product._id}>
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '8px',
-                        background: 'linear-gradient(135deg, #3498db, #2980b9)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'white',
-                        fontSize: '0.8rem',
-                        fontWeight: 'bold'
-                      }}>
-                        {product.name.charAt(0)}
+                    {productColumns.name ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          background: 'linear-gradient(135deg, #3498db, #2980b9)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          fontSize: '0.8rem',
+                          fontWeight: 'bold'
+                        }}>
+                          {product.name.charAt(0)}
+                        </div>
+                        {product.name}
                       </div>
-                      {product.name}
-                    </div>
+                    ) : (
+                      <span style={{ color: '#ccc' }}>---</span>
+                    )}
                   </td>
-                  <td>{product.barcode}</td>
-                  <td>{product.category || 'Uncategorized'}</td>
                   <td>
-                    <StockIndicator>
-                      <span>{product.quantity}</span>
-                      <ProgressBar>
-                        <ProgressFill   
-                          current={product.quantity} 
-                          max={Math.max(product.quantity * 2, 100)} 
-                        />
-                      </ProgressBar>
-                    </StockIndicator>
+                    {productColumns.id ? product.barcode : <span style={{ color: '#ccc' }}>---</span>}
                   </td>
-                  <td>{formatCurrency(product.price)}</td>
-                  <td>{formatCurrency(product.price * product.quantity)}</td>
-                  <td>{product.vendor?.name || 'N/A'}</td>
                   <td>
-                    <StatusBadge variant={getStockStatus(product.quantity, product.reorderLevel || 10)}>
-                      {getStockStatusText(product.quantity, product.reorderLevel || 10)}
-                    </StatusBadge>
+                    {productColumns.category ? (product.category || 'Uncategorized') : <span style={{ color: '#ccc' }}>---</span>}
+                  </td>
+                  <td>
+                    {productColumns.stockLevel ? (
+                      <StockIndicator>
+                        <span>{product.quantity}</span>
+                        <ProgressBar>
+                          <ProgressFill   
+                            current={product.quantity} 
+                            max={Math.max(product.quantity * 2, 100)} 
+                          />
+                        </ProgressBar>
+                      </StockIndicator>
+                    ) : (
+                      <span style={{ color: '#ccc' }}>---</span>
+                    )}
+                  </td>
+                  <td>
+                    {productColumns.price ? formatCurrency(product.price) : <span style={{ color: '#ccc' }}>---</span>}
+                  </td>
+                  <td>
+                    {productColumns.total ? formatCurrency(product.price * product.quantity) : <span style={{ color: '#ccc' }}>---</span>}
+                  </td>
+                  <td>
+                    {productColumns.vendor ? (product.vendor?.name || 'N/A') : <span style={{ color: '#ccc' }}>---</span>}
+                  </td>
+                  <td>
+                    {productColumns.status ? (
+                      <StatusBadge variant={getStockStatus(product.quantity, product.reorderLevel || 10)}>
+                        {getStockStatusText(product.quantity, product.reorderLevel || 10)}
+                      </StatusBadge>
+                    ) : (
+                      <span style={{ color: '#ccc' }}>---</span>
+                    )}
                   </td>
                 </tr>
               ))}
