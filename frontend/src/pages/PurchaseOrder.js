@@ -24,10 +24,10 @@ function PurchaseOrder({ vendors = [], items = [] }) {
     const [selectedVendorId, setSelectedVendorId] = useState("");
     const [selectedItemId, setSelectedItemId] = useState("");
     const [formData, setFormData] = useState({
-        companyName: "Velpaari Enterprises",
-        streetAddress: "5/3 ,32b Pasumai nagar, Thiruchengode main road, Alampalayam (po)",
+        companyName: "VelpaariEnterprises",
+        streetAddress: "5/3 ,32b Pasumai nagar, Thiruchengode main road, Alampalayam(po)",
         cityStateZip: " Erode-638008",
-        phone: "+91 9500791500",
+        phone: "9500791500",
         date: new Date().toLocaleDateString(),
         poNumber: "",
         vendorCompany: "",
@@ -42,7 +42,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
         shipToCompany: "VELPAARI ENTERPRISES",
         shipToAddress: "5/3 ,32b Pasumai nagar, Thiruchengode main road, Alampalayam(po)",
         shipToCityStateZip: "Erode-638008",
-        shipToPhone: "+91 9500791500",
+        shipToPhone: "9500791500",
         items: [],
         subtotal: 0,
         tax: 0,
@@ -181,7 +181,21 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                     <style>
                         body { font-family: "Times New Roman", Times, serif; margin: 20px; }
                         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-                        .logo { width: 60px; height: 60px; border-radius: 50%; }
+                        .logo { 
+                            width: 60px; 
+                            height: 60px; 
+                            border-radius: 50%; 
+                            margin-right: 15px; 
+                            vertical-align: top;
+                            display: inline-block;
+                            object-fit: cover;
+                            max-width: 60px;
+                            max-height: 60px;
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                            visibility: visible;
+                            opacity: 1;
+                        }
                         .title { color: red; font-size: 24px; font-weight: bold; text-align: center; }
                         .info-section { display: flex; justify-content: space-between; margin: 20px 0; }
                         .info-box { border: 2px solid red; padding: 10px; width: 45%; }
@@ -200,7 +214,7 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                 <body>
                     <div class="header">
                         <div>
-                            <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/WhatsApp%20Image%202025-08-26%20at%2016.24.35_73b41c5c.jpg-tq6856nTO6zEuyIbXvyCOvIGhUuO11.jpeg" alt="Logo" class="logo">
+                            <img src="/logo_vp.jpeg" alt="Velpaari Enterprises Logo" class="logo">
                             <div><strong>${formData.companyName}</strong></div>
                             <div>${formData.streetAddress}</div>
                             <div>${formData.cityStateZip}</div>
@@ -288,7 +302,32 @@ function PurchaseOrder({ vendors = [], items = [] }) {
                 </html>
             `);
             printWindow.document.close();
-            printWindow.print();
+            
+            // Wait for logo to load before printing
+            const logoImg = printWindow.document.querySelector('.logo');
+            if (logoImg) {
+                logoImg.onload = () => {
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 500);
+                };
+                logoImg.onerror = () => {
+                    console.log('Logo failed to load in print window');
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 500);
+                };
+                // If image is already loaded
+                if (logoImg.complete) {
+                    setTimeout(() => {
+                        printWindow.print();
+                    }, 500);
+                }
+            } else {
+                setTimeout(() => {
+                    printWindow.print();
+                }, 500);
+            }
         }
     };
 
