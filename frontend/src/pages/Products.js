@@ -718,7 +718,8 @@ const Products = () => {
     quantity: '',
     vendor: '',
     photo: null,
-    imagePreview: ''
+    imagePreview: '',
+    deleteImage: false
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -777,7 +778,8 @@ const Products = () => {
         quantity: product.quantity,
         vendor: product.vendor?._id || '',
         photo: null,
-        imagePreview: product.image || ''
+        imagePreview: product.image || '',
+        deleteImage: false
       });
     } else {
       setEditingProduct(null);
@@ -790,7 +792,8 @@ const Products = () => {
         quantity: '',
         vendor: '',
         photo: null,
-        imagePreview: ''
+        imagePreview: '',
+        deleteImage: false
       });
     }
     setShowModal(true);
@@ -830,7 +833,8 @@ const Products = () => {
       setFormData(prev => ({
         ...prev,
         photo: file,
-        imagePreview: previewUrl
+        imagePreview: previewUrl,
+        deleteImage: false // Reset delete flag when new file is selected
       }));
       
       setError('');
@@ -846,7 +850,8 @@ const Products = () => {
     setFormData(prev => ({
       ...prev,
       imagePreview: '',
-      photo: null
+      photo: null,
+      deleteImage: true // Signal that the image should be deleted
     }));
   };
 
@@ -861,7 +866,8 @@ const Products = () => {
         minquantity: parseInt(formData.minquantity),
         quantity: parseInt(formData.quantity),
         vendor: formData.vendor,
-        photo: formData.photo // Include the file for upload
+        photo: formData.photo, // Include the file for upload
+        deleteImage: formData.deleteImage // Include delete flag for image removal
       };
 
       if (editingProduct) {
