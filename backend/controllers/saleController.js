@@ -76,7 +76,15 @@ exports.updateSale = async (req, res) => {
     await sale.save();
     const populatedSale = await Sale.findById(sale._id)
       .populate('buyer', 'name phone')
-      .populate('items.product', 'name category barcode');
+      .populate('items.product', 'name category barcode')
+      .populate({
+        path: 'items.combo',
+        select: 'name description barcode price products',
+        populate: {
+          path: 'products.product',
+          select: 'name barcode price'
+        }
+      });
     res.json(populatedSale);
   } catch (error) {
     console.log(error.message);
@@ -105,6 +113,7 @@ exports.deleteSale = async (req, res) => {
 };
 const Sale = require('../models/Sale');
 const Product = require('../models/Product');
+const Combo = require('../models/Combo');
 
 // Get all sales
 exports.getAllSales = async (req, res) => {
@@ -112,6 +121,14 @@ exports.getAllSales = async (req, res) => {
     const sales = await Sale.find()
       .populate('buyer', 'name phone')
       .populate('items.product', 'name category')
+      .populate({
+        path: 'items.combo',
+        select: 'name description barcode price products',
+        populate: {
+          path: 'products.product',
+          select: 'name barcode price'
+        }
+      })
       .sort({ saleDate: -1 });
     res.json(sales);
   } catch (error) {
@@ -124,7 +141,15 @@ exports.getSaleById = async (req, res) => {
   try {
     const sale = await Sale.findById(req.params.id)
       .populate('buyer', 'name phone email address')
-      .populate('items.product', 'name description category barcode');
+      .populate('items.product', 'name description category barcode')
+      .populate({
+        path: 'items.combo',
+        select: 'name description barcode price products',
+        populate: {
+          path: 'products.product',
+          select: 'name barcode price'
+        }
+      });
     if (!sale) {
       return res.status(404).json({ message: 'Sale not found' });
     }
@@ -151,56 +176,86 @@ exports.createSale = async (req, res) => {
       total
     } = req.body;
     
-    // Group items by product and sum quantities
-    const productMap = new Map();
-    for (const item of items) {
-      const key = item.product;
-      if (!productMap.has(key)) {
-        productMap.set(key, { ...item, quantity: item.quantity || 1 });
-      } else {
-        productMap.get(key).quantity += item.quantity || 1;
-      }
-    }
-    
-    const uniqueProductIds = Array.from(productMap.keys());
-    const products = await Product.find({ _id: { $in: uniqueProductIds } });
-    
-    if (products.length !== uniqueProductIds.length) {
-      return res.status(400).json({ message: 'Some products are not available' });
-    }
-    
-    // Calculate totals and prepare sale items
-    let totalAmount = 0;
+    // Process all items to handle both products and combos
+    const productDeductions = new Map(); // Track total deductions per product
     const saleItems = [];
+    let totalAmount = 0;
     
-    for (const productId of uniqueProductIds) {
-      const item = productMap.get(productId);
-      const product = products.find(p => p._id.toString() === productId);
-      
-      if (!product) {
-        return res.status(400).json({ message: `Product with id ${productId} not found` });
+    for (const item of items) {
+      if (item.type === 'combo') {
+        // Handle combo item
+        const combo = await Combo.findById(item.combo).populate('products.product');
+        if (!combo) {
+          return res.status(400).json({ message: `Combo with id ${item.combo} not found` });
+        }
+        
+        // Check stock for all combo products
+        for (const comboProduct of combo.products) {
+          const requiredQty = comboProduct.quantity * (item.quantity || 1);
+          const currentDeduction = productDeductions.get(comboProduct.product._id.toString()) || 0;
+          const totalRequired = currentDeduction + requiredQty;
+          
+          if (comboProduct.product.quantity < totalRequired) {
+            return res.status(400).json({ 
+              message: `Product ${comboProduct.product.name} in combo ${combo.name} does not have enough stock. Required: ${totalRequired}, Available: ${comboProduct.product.quantity}` 
+            });
+          }
+          
+          // Track the deduction
+          productDeductions.set(comboProduct.product._id.toString(), totalRequired);
+        }
+        
+        const itemTotal = combo.price * (item.quantity || 1);
+        totalAmount += itemTotal;
+        
+        // Add combo as sale item
+        saleItems.push({
+          type: 'combo',
+          combo: combo._id,
+          comboName: combo.name,
+          quantity: item.quantity || 1,
+          unitPrice: combo.price,
+          total: itemTotal,
+          barcode: combo.barcode
+        });
+        
+      } else {
+        // Handle regular product item
+        const product = await Product.findById(item.product);
+        if (!product) {
+          return res.status(400).json({ message: `Product with id ${item.product} not found` });
+        }
+        
+        const requiredQty = item.quantity || 1;
+        const currentDeduction = productDeductions.get(product._id.toString()) || 0;
+        const totalRequired = currentDeduction + requiredQty;
+        
+        if (product.quantity < totalRequired) {
+          return res.status(400).json({ 
+            message: `Product ${product.name} does not have enough stock. Required: ${totalRequired}, Available: ${product.quantity}` 
+          });
+        }
+        
+        // Track the deduction
+        productDeductions.set(product._id.toString(), totalRequired);
+        
+        const itemTotal = (item.unitPrice || product.price) * requiredQty;
+        totalAmount += itemTotal;
+        
+        saleItems.push({
+          type: 'product',
+          product: product._id,
+          quantity: requiredQty,
+          unitPrice: item.unitPrice || product.price,
+          total: itemTotal,
+          barcode: product.barcode
+        });
       }
-      
-      if (product.quantity < item.quantity) {
-        return res.status(400).json({ message: `Product ${product.name} does not have enough stock` });
-      }
-      
-      const itemTotal = product.price * item.quantity;
-      totalAmount += itemTotal;
-      
-      saleItems.push({
-        product: product._id,
-        quantity: item.quantity,
-        unitPrice: product.price,
-        total: itemTotal,
-        barcode: product.barcode
-      });
-      
-      // Update product quantity
-      await Product.findByIdAndUpdate(
-        product._id,
-        { $inc: { quantity: -item.quantity } }
-      );
+    }
+    
+    // Apply all product deductions
+    for (const [productId, quantity] of productDeductions.entries()) {
+      await Product.findByIdAndUpdate(productId, { $inc: { quantity: -quantity } });
     }
     
     // Create sale with additional fields
@@ -219,9 +274,22 @@ exports.createSale = async (req, res) => {
     });
     
     const savedSale = await sale.save();
+    
+    // Populate the sale differently based on item types
     const populatedSale = await Sale.findById(savedSale._id)
       .populate('buyer', 'name phone')
-      .populate('items.product', 'name category barcode');
+      .populate({
+        path: 'items.product',
+        select: 'name category barcode'
+      })
+      .populate({
+        path: 'items.combo',
+        select: 'name barcode',
+        populate: {
+          path: 'products.product',
+          select: 'name barcode'
+        }
+      });
       
     res.status(201).json(populatedSale);
   } catch (error) {
@@ -234,22 +302,69 @@ exports.createSale = async (req, res) => {
 exports.scanBarcode = async (req, res) => {
   try {
     const { barcode } = req.body;
-    const product = await Product.findOne({ barcode });
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-    res.json({
-      product: {
-        _id: product._id,
-        name: product.name,
-        description: product.description,
-        category: product.category,
+    
+    // First try to find a product with this barcode
+    const product = await Product.findOne({ barcode }).populate('category', 'name code');
+    if (product) {
+      return res.json({
+        type: 'product',
+        product: {
+          _id: product._id,
+          name: product.name,
+          description: product.description,
+          category: product.category,
+          price: product.price,
+          barcode: product.barcode,
+          quantity: product.quantity
+        },
         price: product.price,
-        barcode: product.barcode
-      },
-      price: product.price,
-      barcode: product.barcode,
-    });
+        barcode: product.barcode,
+      });
+    }
+    
+    // If no product found, try to find a combo with this barcode
+    const combo = await Combo.findOne({ barcode, isActive: true })
+      .populate('products.product', 'name price barcode quantity');
+    
+    if (combo) {
+      // Check if all combo products have sufficient stock
+      const insufficientStock = [];
+      for (const comboProduct of combo.products) {
+        if (comboProduct.product.quantity < comboProduct.quantity) {
+          insufficientStock.push({
+            name: comboProduct.product.name,
+            required: comboProduct.quantity,
+            available: comboProduct.product.quantity
+          });
+        }
+      }
+      
+      if (insufficientStock.length > 0) {
+        return res.status(400).json({ 
+          message: 'Insufficient stock for combo items',
+          insufficientStock
+        });
+      }
+      
+      return res.json({
+        type: 'combo',
+        combo: {
+          _id: combo._id,
+          name: combo.name,
+          description: combo.description,
+          price: combo.price,
+          barcode: combo.barcode,
+          products: combo.products.map(cp => ({
+            product: cp.product,
+            quantity: cp.quantity
+          }))
+        },
+        price: combo.price,
+        barcode: combo.barcode,
+      });
+    }
+    
+    return res.status(404).json({ message: 'Product or combo not found' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

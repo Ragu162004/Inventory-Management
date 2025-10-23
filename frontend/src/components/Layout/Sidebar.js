@@ -324,7 +324,9 @@ const Sidebar = () => {
       items: [
         { path: "/vendors", icon: "bi-truck", text: "Vendors" },
         { path: "/buyers", icon: "bi-people", text: "Buyers" },
+        { path: "/categories", icon: "bi-tags", text: "Categories" },
         { path: "/products", icon: "bi-box", text: "Products" },
+        { path: "/combos", icon: "bi-collection", text: "Combos" },
       ]
     },
     {

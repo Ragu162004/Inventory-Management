@@ -1,7 +1,7 @@
 import axios from 'axios';
 //base
-const API_BASE_URL = "https://inventory-management-yexl.onrender.com/api";
-//  const API_BASE_URL = "http://localhost:5000/api";
+// const API_BASE_URL = "https://inventory-management-yexl.onrender.com/api";
+ const API_BASE_URL = "http://localhost:5000/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -100,6 +100,44 @@ export const salesAPI = {
 export const barcodesAPI = {
   getByBarcode: (barcode) => api.get(`/barcodes/${barcode}`),
   generate: (productItemId) => api.get(`/barcodes/product-item/${productItemId}`),
+};
+
+// Returns API
+export const returnsAPI = {
+  getAll: () => api.get('/returns'),
+  getById: (id) => api.get(`/returns/${id}`),
+  create: (data) => api.post('/returns', data),
+  update: (id, data) => api.put(`/returns/${id}`, data),
+  delete: (id) => api.delete(`/returns/${id}`),
+  getByCategory: (category) => api.get(`/returns/category/${category}`),
+};
+
+// Categories API
+export const categoriesAPI = {
+  getAll: () => api.get('/categories'),
+  getById: (id) => api.get(`/categories/${id}`),
+  create: (data) => api.post('/categories', data),
+  update: (id, data) => api.put(`/categories/${id}`, data),
+  delete: (id) => api.delete(`/categories/${id}`),
+  getNextCode: () => api.get('/categories/next-code'),
+};
+
+// Combos API
+export const combosAPI = {
+  getAll: () => api.get('/combos'),
+  getById: (id) => api.get(`/combos/${id}`),
+  getByBarcode: (barcode) => api.get(`/combos/barcode/${barcode}`),
+  create: (formData) => {
+    return api.post('/combos', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  update: (id, formData) => {
+    return api.put(`/combos/${id}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  delete: (id) => api.delete(`/combos/${id}`),
 };
 
 export default api;

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import styled, { keyframes, css } from 'styled-components';
-import { productsAPI, vendorsAPI } from '../services/api';
+import { productsAPI, vendorsAPI, returnsAPI, categoriesAPI } from '../services/api';
+import Quagga from 'quagga';
 
 // Animations
 const fadeIn = keyframes`
@@ -33,6 +34,11 @@ const progressBar = keyframes`
 const zoomIn = keyframes`
   from { transform: scale(0.8); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+`;
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 `;
 
 // Styled Components
@@ -705,6 +711,85 @@ const ClearIcon = styled.i`
   }
 `;
 
+// Scanner styled components
+const scannerFlash = keyframes`
+  0% { opacity: 0.3; }
+  50% { opacity: 1; }
+  100% { opacity: 0.3; }
+`;
+
+const ScannerContainer = styled.div`
+  width: 100%;
+  height: 250px;
+  background: #000;
+  border-radius: 15px;
+  overflow: hidden;
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 2px solid #00ff00;
+    border-radius: 10px;
+    animation: ${scannerFlash} 2s ease-in-out infinite;
+    pointer-events: none;
+  }
+`;
+
+const ScannerButton = styled.button`
+  border-radius: 20px;
+  padding: 0.8rem 1.5rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border: none;
+  
+  ${props => props.$active ? css`
+    background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(229, 62, 62, 0.3);
+    
+    &:hover {
+      background: linear-gradient(135deg, #c53030 0%, #9b2c2c 100%);
+      transform: translateY(-2px);
+    }
+  ` : css`
+    background: linear-gradient(to right, #3498db);
+    color: white;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    
+    &:hover {
+      background: linear-gradient(to right, #3498db);
+      transform: translateY(-2px);
+    }
+  `}
+`;
+
+const ScannerStatus = styled.div`
+  padding: 1rem;
+  border-radius: 10px;
+  background: ${props => props.$active ? '#48bb78' : '#e53e3e'};
+  color: white;
+  text-align: center;
+  margin-bottom: 1rem;
+  font-weight: 600;
+`;
+
+// Global style for spin animation
+const GlobalStyle = styled.div`
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+`;
+
 const Products = () => {
   const [products, setProducts] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -725,14 +810,64 @@ const Products = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
   const [vendors, setVendors] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [barcodeFilter, setBarcodeFilter] = useState('');
+  const [showRTOModal, setShowRTOModal] = useState(false);
+  const [rtoFormData, setRTOFormData] = useState({
+    category: 'RTO', // Fixed category for RTO
+    returnDate: new Date().toISOString().split('T')[0],
+    customerName: '',
+    customerPhone: '',
+    customerEmail: '',
+    reason: '',
+    items: [],
+    totalAmount: 0,
+    comments: '',
+    status: 'processed' // Default status
+  });
+  const [rtoScannerActive, setRTOScannerActive] = useState(false);
+  const [rtoScannedCode, setRTOScannedCode] = useState('');
+  const [rtoBarcodeMode, setRTOBarcodeMode] = useState(false);
+  
+  const rtoScannerRef = useRef(null);
+  const rtoBarcodeInputRef = useRef(null);
+
+  // RPU States
+  const [showRPUModal, setShowRPUModal] = useState(false);
+  const [rpuFormData, setRPUFormData] = useState({
+    category: 'RPU', // Fixed category for RPU
+    returnDate: new Date().toISOString().split('T')[0],
+    customerName: '',
+    customerPhone: '',
+    customerEmail: '',
+    reason: '',
+    items: [],
+    totalAmount: 0,
+    comments: '',
+    status: 'processed' // Default status
+  });
+  const [rpuScannerActive, setRPUScannerActive] = useState(false);
+  const [rpuScannedCode, setRPUScannedCode] = useState('');
+  const [rpuBarcodeMode, setRPUBarcodeMode] = useState(false);
+  
+  const rpuScannerRef = useRef(null);
+  const rpuBarcodeInputRef = useRef(null);
 
   useEffect(() => {
     fetchProducts();
     fetchVendors();
+    fetchCategories();
+  }, []);
+  
+  // Cleanup scanner on component unmount
+  useEffect(() => {
+    return () => {
+      stopRTOScanner();
+      stopRPUScanner();
+    };
   }, []);
 
   // Effect to handle select all checkbox state
@@ -766,13 +901,22 @@ const Products = () => {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const response = await categoriesAPI.getAll();
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Failed to fetch categories:', error);
+    }
+  };
+
   const handleShowModal = (product = null) => {
     if (product) {
       setEditingProduct(product);
       setFormData({
         name: product.name,
         description: product.description || '',
-        category: product.category,
+        category: product.category?._id || '',
         price: product.price,
         minquantity: product.minquantity,
         quantity: product.quantity,
@@ -1076,6 +1220,725 @@ const Products = () => {
     }
   };
 
+  // RTO Form Functions
+  const handleRTOInputChange = (name, value) => {
+    setRTOFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const calculateRTOTotal = () => {
+    return rtoFormData.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+  };
+
+  const handleRTOItemChange = (index, field, value) => {
+    const newItems = [...rtoFormData.items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    
+    const totalAmount = newItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+    
+    setRTOFormData(prev => ({
+      ...prev,
+      items: newItems,
+      totalAmount
+    }));
+  };
+
+  const handleAddRTOItem = () => {
+    setRTOFormData(prev => ({
+      ...prev,
+      items: [...prev.items, {
+        product: '',
+        productName: '',
+        barcode: '',
+        quantity: 1,
+        unitPrice: 0,
+        total: 0
+      }]
+    }));
+  };
+
+  const handleRemoveRTOItem = (index) => {
+    const newItems = rtoFormData.items.filter((_, i) => i !== index);
+    const totalAmount = newItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+    
+    setRTOFormData(prev => ({
+      ...prev,
+      items: newItems,
+      totalAmount
+    }));
+  };
+
+  const handleRTOProductSelect = (index, productId) => {
+    const product = products.find(p => p._id === productId);
+    if (product) {
+      const newItems = [...rtoFormData.items];
+      newItems[index] = {
+        ...newItems[index],
+        product: product._id,
+        productName: product.name,
+        barcode: product.barcode || '',
+        unitPrice: product.price
+      };
+      
+      const totalAmount = newItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+      
+      setRTOFormData(prev => ({
+        ...prev,
+        items: newItems,
+        totalAmount
+      }));
+    }
+  };
+
+  const handleRTOSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!rtoFormData.customerName || rtoFormData.items.length === 0) {
+      setError('Customer name and at least one item are required');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Prepare the return data for API
+      const returnData = {
+        category: 'RTO',
+        returnDate: rtoFormData.returnDate,
+        customerName: rtoFormData.customerName,
+        customerPhone: rtoFormData.customerPhone,
+        customerEmail: rtoFormData.customerEmail,
+        reason: rtoFormData.reason,
+        items: rtoFormData.items.map(item => ({
+          product: item.product,
+          productName: item.productName,
+          barcode: item.barcode,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: item.unitPrice * item.quantity
+        })),
+        totalAmount: rtoFormData.totalAmount,
+        comments: rtoFormData.comments,
+        status: 'processed'
+      };
+      
+      // Create the return record
+      const response = await returnsAPI.create(returnData);
+      
+      if (response.data) {
+        const returnId = response.data.returnId || response.data.return?.returnId || response.data._id;
+        setSuccess(`RTO processed successfully! Return ID: ${returnId}. Product quantities have been updated.`);
+        
+        // Refresh the products list to show updated quantities
+        await fetchProducts();
+        
+        // Reset form and close modal
+        setRTOFormData({
+          category: 'RTO',
+          returnDate: new Date().toISOString().split('T')[0],
+          customerName: '',
+          customerPhone: '',
+          customerEmail: '',
+          reason: '',
+          items: [],
+          totalAmount: 0,
+          comments: '',
+          status: 'processed'
+        });
+        setShowRTOModal(false);
+        
+        // Clear success message after 8 seconds to give user time to read
+        setTimeout(() => setSuccess(''), 8000);
+      }
+    } catch (error) {
+      console.error('RTO Submission Error:', error);
+      setError(error.response?.data?.message || 'Failed to process RTO. Please try again.');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloseRTOModal = () => {
+    stopRTOScanner(); // Stop scanner when closing modal
+    setShowRTOModal(false);
+    setRTOFormData({
+      category: 'RTO',
+      returnDate: new Date().toISOString().split('T')[0],
+      customerName: '',
+      customerPhone: '',
+      customerEmail: '',
+      reason: '',
+      items: [],
+      totalAmount: 0,
+      comments: '',
+      status: 'processed'
+    });
+    setRTOScannedCode('');
+    setRTOBarcodeMode(false);
+  };
+
+  // RTO Scanner Functions
+  const startRTOScanner = () => {
+    if (rtoScannerRef.current) {
+      Quagga.init(
+        {
+          inputStream: {
+            type: "LiveStream",
+            target: rtoScannerRef.current,
+            constraints: {
+              facingMode: "environment",
+            },
+          },
+          decoder: {
+            readers: [
+              "code_128_reader",
+              "ean_reader",
+              "upc_reader",
+              "code_39_reader",
+            ],
+          },
+        },
+        (err) => {
+          if (err) {
+            setError("Unable to start RTO scanner: " + err);
+            return;
+          }
+          Quagga.start();
+          setRTOScannerActive(true);
+        }
+      );
+
+      Quagga.onDetected((data) => {
+        if (data && data.codeResult && data.codeResult.code) {
+          setRTOScannedCode(data.codeResult.code);
+        }
+      });
+    }
+  };
+
+  const stopRTOScanner = () => {
+    try {
+      Quagga.stop();
+      setRTOScannerActive(false);
+    } catch (error) {
+      // Ignore errors when stopping scanner
+    }
+  };
+
+  const toggleRTOBarcodeMode = () => {
+    setRTOBarcodeMode(prev => {
+      const newMode = !prev;
+      if (newMode) {
+        setTimeout(() => {
+          if (rtoBarcodeInputRef.current) {
+            rtoBarcodeInputRef.current.focus();
+          }
+        }, 100);
+      } else {
+        setRTOScannedCode("");
+      }
+      return newMode;
+    });
+  };
+
+  const addRTOBarcodeManually = async () => {
+    if (!rtoScannedCode || !rtoBarcodeMode) return;
+    
+    try {
+      await addRTOScannedItem();
+      setRTOScannedCode("");
+    } catch (error) {
+      console.error("Error adding barcode manually:", error);
+    }
+  };
+
+  const addRTOScannedItem = async () => {
+    if (!rtoScannedCode) return;
+    
+    try {
+      // Find product by barcode in the products list
+      const productMatch = products.find(p => p.barcode === rtoScannedCode);
+      
+      if (productMatch) {
+        // Check if this barcode already exists in RTO items
+        const existingItemIndex = rtoFormData.items.findIndex(item => item.barcode === rtoScannedCode);
+        
+        let newItems = [...rtoFormData.items];
+        
+        if (existingItemIndex !== -1) {
+          // Increment quantity of existing item
+          newItems[existingItemIndex] = {
+            ...newItems[existingItemIndex],
+            quantity: (newItems[existingItemIndex].quantity || 1) + 1
+          };
+        } else {
+          // Add new item
+          newItems.push({
+            product: productMatch._id,
+            productName: productMatch.name,
+            barcode: productMatch.barcode,
+            quantity: 1,
+            unitPrice: productMatch.price,
+            total: productMatch.price
+          });
+        }
+        
+        // Calculate total amount
+        const totalAmount = newItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+        
+        setRTOFormData(prev => ({
+          ...prev,
+          items: newItems,
+          totalAmount
+        }));
+        
+        setRTOScannedCode("");
+        setSuccess(`Added ${productMatch.name} to return items`);
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        // Try to fetch product by barcode from API
+        try {
+          const response = await productsAPI.getByBarcode(rtoScannedCode);
+          if (response.data) {
+            const product = response.data;
+            
+            // Check if this barcode already exists in RTO items
+            const existingItemIndex = rtoFormData.items.findIndex(item => item.barcode === rtoScannedCode);
+            
+            let newItems = [...rtoFormData.items];
+            
+            if (existingItemIndex !== -1) {
+              // Increment quantity of existing item
+              newItems[existingItemIndex] = {
+                ...newItems[existingItemIndex],
+                quantity: (newItems[existingItemIndex].quantity || 1) + 1
+              };
+            } else {
+              // Add new item
+              newItems.push({
+                product: product._id,
+                productName: product.name,
+                barcode: product.barcode,
+                quantity: 1,
+                unitPrice: product.price,
+                total: product.price
+              });
+            }
+            
+            // Calculate total amount
+            const totalAmount = newItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+            
+            setRTOFormData(prev => ({
+              ...prev,
+              items: newItems,
+              totalAmount
+            }));
+            
+            setRTOScannedCode("");
+            setSuccess(`Added ${product.name} to return items`);
+            
+            // Clear success message after 3 seconds
+            setTimeout(() => setSuccess(''), 3000);
+          } else {
+            setError(`Product with barcode ${rtoScannedCode} not found`);
+            setTimeout(() => setError(''), 3000);
+          }
+        } catch (error) {
+          setError(`Product with barcode ${rtoScannedCode} not found`);
+          setTimeout(() => setError(''), 3000);
+        }
+      }
+      
+      // Restart scanner if it was active
+      if (rtoScannerActive) {
+        stopRTOScanner();
+        setTimeout(() => {
+          startRTOScanner();
+        }, 1000);
+      }
+    } catch (error) {
+      setError(`Error processing barcode: ${rtoScannedCode}`);
+      setTimeout(() => setError(''), 3000);
+      setRTOScannedCode("");
+    }
+  };
+
+  // Auto-add scanned items when not in barcode mode
+  useEffect(() => {
+    if (!rtoScannedCode || rtoBarcodeMode) return;
+    
+    addRTOScannedItem();
+  }, [rtoScannedCode, rtoBarcodeMode]);
+
+  // Focus barcode input when barcode mode is enabled
+  useEffect(() => {
+    if (rtoBarcodeMode && rtoBarcodeInputRef.current) {
+      rtoBarcodeInputRef.current.focus();
+    }
+  }, [rtoBarcodeMode]);
+
+  // RPU Form Functions
+  const handleRPUInputChange = (name, value) => {
+    setRPUFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleRPUItemChange = (index, field, value) => {
+    const newItems = [...rpuFormData.items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    
+    const totalAmount = newItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+    
+    setRPUFormData(prev => ({
+      ...prev,
+      items: newItems,
+      totalAmount
+    }));
+  };
+
+  const handleAddRPUItem = () => {
+    setRPUFormData(prev => ({
+      ...prev,
+      items: [...prev.items, {
+        product: '',
+        productName: '',
+        barcode: '',
+        quantity: 1,
+        unitPrice: 0,
+        total: 0
+      }]
+    }));
+  };
+
+  const handleRemoveRPUItem = (index) => {
+    const newItems = rpuFormData.items.filter((_, i) => i !== index);
+    const totalAmount = newItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+    
+    setRPUFormData(prev => ({
+      ...prev,
+      items: newItems,
+      totalAmount
+    }));
+  };
+
+  const handleRPUProductSelect = (index, productId) => {
+    const product = products.find(p => p._id === productId);
+    if (product) {
+      const newItems = [...rpuFormData.items];
+      newItems[index] = {
+        ...newItems[index],
+        product: product._id,
+        productName: product.name,
+        barcode: product.barcode || '',
+        unitPrice: product.price
+      };
+      
+      const totalAmount = newItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+      
+      setRPUFormData(prev => ({
+        ...prev,
+        items: newItems,
+        totalAmount
+      }));
+    }
+  };
+
+  const handleRPUSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!rpuFormData.customerName || rpuFormData.items.length === 0) {
+      setError('Customer name and at least one item are required');
+      setTimeout(() => setError(''), 3000);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Prepare the return data for API
+      const returnData = {
+        category: 'RPU',
+        returnDate: rpuFormData.returnDate,
+        customerName: rpuFormData.customerName,
+        customerPhone: rpuFormData.customerPhone,
+        customerEmail: rpuFormData.customerEmail,
+        reason: rpuFormData.reason,
+        items: rpuFormData.items.map(item => ({
+          product: item.product,
+          productName: item.productName,
+          barcode: item.barcode,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: item.unitPrice * item.quantity
+        })),
+        totalAmount: rpuFormData.totalAmount,
+        comments: rpuFormData.comments,
+        status: 'processed'
+      };
+      
+      // Create the return record
+      const response = await returnsAPI.create(returnData);
+      
+      if (response.data) {
+        const returnId = response.data.returnId || response.data.return?.returnId || response.data._id;
+        setSuccess(`RPU processed successfully! Return ID: ${returnId}. Record saved (no inventory changes).`);
+        
+        // Reset form and close modal
+        setRPUFormData({
+          category: 'RPU',
+          returnDate: new Date().toISOString().split('T')[0],
+          customerName: '',
+          customerPhone: '',
+          customerEmail: '',
+          reason: '',
+          items: [],
+          totalAmount: 0,
+          comments: '',
+          status: 'processed'
+        });
+        setShowRPUModal(false);
+        
+        // Clear success message after 8 seconds
+        setTimeout(() => setSuccess(''), 8000);
+      }
+    } catch (error) {
+      console.error('RPU Submission Error:', error);
+      setError(error.response?.data?.message || 'Failed to process RPU. Please try again.');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloseRPUModal = () => {
+    stopRPUScanner(); // Stop scanner when closing modal
+    setShowRPUModal(false);
+    setRPUFormData({
+      category: 'RPU',
+      returnDate: new Date().toISOString().split('T')[0],
+      customerName: '',
+      customerPhone: '',
+      customerEmail: '',
+      reason: '',
+      items: [],
+      totalAmount: 0,
+      comments: '',
+      status: 'processed'
+    });
+    setRPUScannedCode('');
+    setRPUBarcodeMode(false);
+  };
+
+  // RPU Scanner Functions
+  const startRPUScanner = () => {
+    if (rpuScannerRef.current) {
+      Quagga.init(
+        {
+          inputStream: {
+            type: "LiveStream",
+            target: rpuScannerRef.current,
+            constraints: {
+              facingMode: "environment",
+            },
+          },
+          decoder: {
+            readers: [
+              "code_128_reader",
+              "ean_reader",
+              "upc_reader",
+              "code_39_reader",
+            ],
+          },
+        },
+        (err) => {
+          if (err) {
+            setError("Unable to start RPU scanner: " + err);
+            return;
+          }
+          Quagga.start();
+          setRPUScannerActive(true);
+        }
+      );
+
+      Quagga.onDetected((data) => {
+        if (data && data.codeResult && data.codeResult.code) {
+          setRPUScannedCode(data.codeResult.code);
+        }
+      });
+    }
+  };
+
+  const stopRPUScanner = () => {
+    try {
+      Quagga.stop();
+      setRPUScannerActive(false);
+    } catch (error) {
+      // Ignore errors when stopping scanner
+    }
+  };
+
+  const toggleRPUBarcodeMode = () => {
+    setRPUBarcodeMode(prev => {
+      const newMode = !prev;
+      if (newMode) {
+        setTimeout(() => {
+          if (rpuBarcodeInputRef.current) {
+            rpuBarcodeInputRef.current.focus();
+          }
+        }, 100);
+      } else {
+        setRPUScannedCode("");
+      }
+      return newMode;
+    });
+  };
+
+  const addRPUBarcodeManually = async () => {
+    if (!rpuScannedCode || !rpuBarcodeMode) return;
+    
+    try {
+      await addRPUScannedItem();
+      setRPUScannedCode("");
+    } catch (error) {
+      console.error("Error adding barcode manually:", error);
+    }
+  };
+
+  const addRPUScannedItem = async () => {
+    if (!rpuScannedCode) return;
+    
+    try {
+      // Find product by barcode in the products list
+      const productMatch = products.find(p => p.barcode === rpuScannedCode);
+      
+      if (productMatch) {
+        // Check if this barcode already exists in RPU items
+        const existingItemIndex = rpuFormData.items.findIndex(item => item.barcode === rpuScannedCode);
+        
+        let newItems = [...rpuFormData.items];
+        
+        if (existingItemIndex !== -1) {
+          // Increment quantity of existing item
+          newItems[existingItemIndex] = {
+            ...newItems[existingItemIndex],
+            quantity: (newItems[existingItemIndex].quantity || 1) + 1
+          };
+        } else {
+          // Add new item
+          newItems.push({
+            product: productMatch._id,
+            productName: productMatch.name,
+            barcode: productMatch.barcode,
+            quantity: 1,
+            unitPrice: productMatch.price,
+            total: productMatch.price
+          });
+        }
+        
+        // Calculate total amount
+        const totalAmount = newItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+        
+        setRPUFormData(prev => ({
+          ...prev,
+          items: newItems,
+          totalAmount
+        }));
+        
+        setRPUScannedCode("");
+        setSuccess(`Added ${productMatch.name} to processing items`);
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        // Try to fetch product by barcode from API
+        try {
+          const response = await productsAPI.getByBarcode(rpuScannedCode);
+          if (response.data) {
+            const product = response.data;
+            
+            // Check if this barcode already exists in RPU items
+            const existingItemIndex = rpuFormData.items.findIndex(item => item.barcode === rpuScannedCode);
+            
+            let newItems = [...rpuFormData.items];
+            
+            if (existingItemIndex !== -1) {
+              // Increment quantity of existing item
+              newItems[existingItemIndex] = {
+                ...newItems[existingItemIndex],
+                quantity: (newItems[existingItemIndex].quantity || 1) + 1
+              };
+            } else {
+              // Add new item
+              newItems.push({
+                product: product._id,
+                productName: product.name,
+                barcode: product.barcode,
+                quantity: 1,
+                unitPrice: product.price,
+                total: product.price
+              });
+            }
+            
+            // Calculate total amount
+            const totalAmount = newItems.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+            
+            setRPUFormData(prev => ({
+              ...prev,
+              items: newItems,
+              totalAmount
+            }));
+            
+            setRPUScannedCode("");
+            setSuccess(`Added ${product.name} to processing items`);
+            
+            // Clear success message after 3 seconds
+            setTimeout(() => setSuccess(''), 3000);
+          } else {
+            setError(`Product with barcode ${rpuScannedCode} not found`);
+            setTimeout(() => setError(''), 3000);
+          }
+        } catch (error) {
+          setError(`Product with barcode ${rpuScannedCode} not found`);
+          setTimeout(() => setError(''), 3000);
+        }
+      }
+      
+      // Restart scanner if it was active
+      if (rpuScannerActive) {
+        stopRPUScanner();
+        setTimeout(() => {
+          startRPUScanner();
+        }, 1000);
+      }
+    } catch (error) {
+      setError(`Error processing barcode: ${rpuScannedCode}`);
+      setTimeout(() => setError(''), 3000);
+      setRPUScannedCode("");
+    }
+  };
+
+  // Auto-add scanned items when not in barcode mode for RPU
+  useEffect(() => {
+    if (!rpuScannedCode || rpuBarcodeMode) return;
+    
+    addRPUScannedItem();
+  }, [rpuScannedCode, rpuBarcodeMode]);
+
+  // Focus barcode input when barcode mode is enabled for RPU
+  useEffect(() => {
+    if (rpuBarcodeMode && rpuBarcodeInputRef.current) {
+      rpuBarcodeInputRef.current.focus();
+    }
+  }, [rpuBarcodeMode]);
+
   if (loading) {
     return (
       <PageContainer>
@@ -1086,6 +1949,7 @@ const Products = () => {
 
   return (
     <PageContainer>
+      <GlobalStyle />
       <PageHeader>
         <PageTitle>Products Management</PageTitle>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1108,6 +1972,14 @@ const Products = () => {
           <ActionButton onClick={() => handleShowModal()}>
             <i className="bi bi-plus-circle"></i>
             Add New Product
+          </ActionButton>
+          <ActionButton onClick={() => setShowRTOModal(true)}>
+            <i className="bi bi-arrow-return-left"></i>
+            RTO
+          </ActionButton>
+          <ActionButton onClick={() => setShowRPUModal(true)}>
+            <i className="bi bi-arrow-clockwise"></i>
+            RPU
           </ActionButton>
         </div>
       </PageHeader>
@@ -1195,7 +2067,9 @@ const Products = () => {
                       </div>
                     </td>
                     <td>{product.barcode || '-'}</td>
-                    <td>{product.category}</td>
+                    <td>
+                      {product.category?.code ? `${product.category.code} - ${product.category.name}` : 'N/A'}
+                    </td>
                     <td>{formatCurrency(product.price)}</td>
                     <td>{product.minquantity}</td>
                     <td>
@@ -1296,15 +2170,29 @@ const Products = () => {
                   </FormGroup>
 
                   <FormGroup>
-                    <Label>Category </Label>
-                    <Input
-                      type="text"
+                    <Label>Category *</Label>
+                    <select
                       name="category"
                       value={formData.category}
                       onChange={handleInputChange}
                       required
-                      placeholder="Enter category"
-                    />
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '2px solid #e0e0e0',
+                        borderRadius: '8px',
+                        fontSize: '1rem',
+                        backgroundColor: 'white',
+                        transition: 'all 0.3s ease'
+                      }}
+                    >
+                      <option value="">Select a category</option>
+                      {categories.map(category => (
+                        <option key={category._id} value={category._id}>
+                          {category.code} - {category.name}
+                        </option>
+                      ))}
+                    </select>
                   </FormGroup>
 
                   <FormGroup>
@@ -1416,6 +2304,743 @@ const Products = () => {
             <PreviewImage src={imagePreview} alt="Product preview" />
           </ImagePreviewContainer>
         </ImagePreviewModal>
+      )}
+
+      {/* RTO (Return to Origin) Modal */}
+      {showRTOModal && (
+        <ModalOverlay onClick={handleCloseRTOModal}>
+          <ModalContainer onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px' }}>
+            <ModalHeader>
+              <div>
+                <ModalTitle>
+                  <i className="bi bi-arrow-return-left" style={{ marginRight: '0.5rem' }}></i>
+                  Return to Origin (RTO)
+                </ModalTitle>
+                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.2rem' }}>
+                  Process customer returns and automatically restore inventory quantities
+                </div>
+              </div>
+              <CloseButton onClick={handleCloseRTOModal}>
+                <i className="bi bi-x"></i>
+              </CloseButton>
+            </ModalHeader>
+            <form onSubmit={handleRTOSubmit}>
+              <ModalBody>
+                {/* Customer Information */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h4 style={{ color: '#2c3e50', marginBottom: '1rem', borderBottom: '2px solid #3498db', paddingBottom: '0.5rem' }}>
+                    Customer Information
+                  </h4>
+                  <FormGrid>
+                    <FormGroup>
+                      <Label>Return Date</Label>
+                      <Input
+                        type="date"
+                        value={rtoFormData.returnDate}
+                        onChange={(e) => handleRTOInputChange('returnDate', e.target.value)}
+                        required
+                      />
+                    </FormGroup>
+                    <FormGroup>
+                      <Label>Customer Name</Label>
+                      <Input
+                        type="text"
+                        value={rtoFormData.customerName}
+                        onChange={(e) => handleRTOInputChange('customerName', e.target.value)}
+                        placeholder="Enter customer name"
+                        required
+                      />
+                    </FormGroup>
+                    <FormGroup>
+                      <Label>Customer Phone</Label>
+                      <Input
+                        type="tel"
+                        value={rtoFormData.customerPhone}
+                        onChange={(e) => handleRTOInputChange('customerPhone', e.target.value)}
+                        placeholder="Enter phone number"
+                      />
+                    </FormGroup>
+                    <FormGroup>
+                      <Label>Customer Email</Label>
+                      <Input
+                        type="email"
+                        value={rtoFormData.customerEmail}
+                        onChange={(e) => handleRTOInputChange('customerEmail', e.target.value)}
+                        placeholder="Enter email address"
+                      />
+                    </FormGroup>
+                    <FormGroup>
+                      <Label>Return Reason</Label>
+                      <Select
+                        value={rtoFormData.reason}
+                        onChange={(e) => handleRTOInputChange('reason', e.target.value)}
+                        required
+                      >
+                        <option value="">Select reason</option>
+                        <option value="defective">Defective Product</option>
+                        <option value="wrong_item">Wrong Item Delivered</option>
+                        <option value="damaged">Damaged During Shipping</option>
+                        <option value="not_satisfied">Customer Not Satisfied</option>
+                        <option value="warranty_claim">Warranty Claim</option>
+                        <option value="other">Other</option>
+                      </Select>
+                    </FormGroup>
+                  </FormGrid>
+                </div>
+
+                {/* Barcode Scanning Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h4 style={{ color: '#2c3e50', marginBottom: '1rem', borderBottom: '2px solid #3498db', paddingBottom: '0.5rem' }}>
+                    <i className="bi bi-upc-scan" style={{ marginRight: '0.5rem' }}></i>
+                    Scan Return Items
+                  </h4>
+
+                  <ScannerStatus $active={rtoScannerActive} style={{ marginBottom: '1rem' }}>
+                    {rtoScannerActive ? '🟢 Scanner Active' : '🔴 Scanner Inactive'}
+                  </ScannerStatus>
+                  
+                  <ScannerContainer ref={rtoScannerRef} style={{ marginBottom: '1rem' }} />
+
+                  <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    <ScannerButton
+                      type="button"
+                      $active={rtoScannerActive}
+                      onClick={rtoScannerActive ? stopRTOScanner : startRTOScanner}
+                    >
+                      {rtoScannerActive ? '⏹️ Stop Scanner' : '📷 Start Scanner'}
+                    </ScannerButton>
+                  </div>
+
+                  {/* Barcode Input */}
+                  <FormGroup style={{ marginBottom: '1rem' }}>
+                    <Label>Scanned Barcode</Label>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Input
+                        ref={rtoBarcodeInputRef}
+                        type="text"
+                        value={rtoScannedCode}
+                        onChange={(e) => setRTOScannedCode(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (rtoBarcodeMode && rtoScannedCode.trim()) {
+                              addRTOBarcodeManually();
+                            }
+                          }
+                        }}
+                        placeholder={rtoBarcodeMode ? "Barcode mode active - scan or enter barcode" : "Enter barcode manually"}
+                        disabled={!rtoBarcodeMode}
+                        style={{ flex: '1', minWidth: '200px' }}
+                      />
+                      <SecondaryButton 
+                        type="button"
+                        onClick={toggleRTOBarcodeMode}
+                        style={{
+                          background: rtoBarcodeMode ? '#28a745' : 'transparent',
+                          color: rtoBarcodeMode ? 'white' : '#3498db',
+                          border: rtoBarcodeMode ? '2px solid #28a745' : '2px solid #3498db'
+                        }}
+                      >
+                        {rtoBarcodeMode ? '✓ Barcode Active' : '📊 Enable Barcode'}
+                      </SecondaryButton>
+                      {rtoBarcodeMode && rtoScannedCode && (
+                        <ActionButton 
+                          type="button"
+                          onClick={addRTOBarcodeManually}
+                          style={{ background: 'linear-gradient(to right, #28a745, #20c997)' }}
+                        >
+                          ➕ Add Item
+                        </ActionButton>
+                      )}
+                    </div>
+                    {rtoBarcodeMode && (
+                      <small style={{ color: '#6c757d', marginTop: '0.5rem', display: 'block' }}>
+                        📍 Barcode mode is active. Scan barcode or press Enter to add items automatically.
+                      </small>
+                    )}
+                  </FormGroup>
+                </div>
+
+                {/* Return Items */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h4 style={{ color: '#2c3e50', margin: 0, borderBottom: '2px solid #3498db', paddingBottom: '0.5rem' }}>
+                      Return Items ({rtoFormData.items.length})
+                    </h4>
+                    <ActionButton type="button" onClick={handleAddRTOItem}>
+                      <i className="bi bi-plus-circle"></i>
+                      Add Item Manually
+                    </ActionButton>
+                  </div>
+
+                  {rtoFormData.items.length > 0 ? (
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead style={{ background: 'linear-gradient(to right, #3498db)', color: 'white' }}>
+                          <tr>
+                            <th style={{ padding: '0.8rem', textAlign: 'left', border: 'none' }}>Product</th>
+                            <th style={{ padding: '0.8rem', textAlign: 'left', border: 'none' }}>Barcode</th>
+                            <th style={{ padding: '0.8rem', textAlign: 'left', border: 'none' }}>Price</th>
+                            <th style={{ padding: '0.8rem', textAlign: 'left', border: 'none' }}>Quantity</th>
+                            <th style={{ padding: '0.8rem', textAlign: 'left', border: 'none' }}>Total</th>
+                            <th style={{ padding: '0.8rem', textAlign: 'left', border: 'none' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rtoFormData.items.map((item, index) => (
+                            <tr key={index} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                              <td style={{ padding: '0.8rem' }}>
+                                <Select
+                                  value={item.product}
+                                  onChange={(e) => handleRTOProductSelect(index, e.target.value)}
+                                  required
+                                  style={{ minWidth: '200px' }}
+                                >
+                                  <option value="">Select Product</option>
+                                  {products.map(product => (
+                                    <option key={product._id} value={product._id}>
+                                      {product.name}
+                                    </option>
+                                  ))}
+                                </Select>
+                              </td>
+                              <td style={{ padding: '0.8rem' }}>
+                                <span style={{
+                                  background: 'linear-gradient(to right, #3498db)',
+                                  color: 'white',
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: '4px',
+                                  fontSize: '0.8rem'
+                                }}>
+                                  {item.barcode || 'N/A'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '0.8rem' }}>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={item.unitPrice}
+                                  onChange={(e) => handleRTOItemChange(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                  style={{ width: '100px' }}
+                                />
+                              </td>
+                              <td style={{ padding: '0.8rem' }}>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={(e) => handleRTOItemChange(index, 'quantity', parseInt(e.target.value) || 1)}
+                                  style={{ width: '80px' }}
+                                />
+                              </td>
+                              <td style={{ padding: '0.8rem', fontWeight: 'bold' }}>
+                                ₹{(item.unitPrice * item.quantity).toFixed(2)}
+                              </td>
+                              <td style={{ padding: '0.8rem' }}>
+                                <SecondaryButton
+                                  type="button"
+                                  onClick={() => handleRemoveRTOItem(index)}
+                                  style={{
+                                    background: '#e74c3c',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '0.3rem 0.8rem',
+                                    fontSize: '0.8rem'
+                                  }}
+                                >
+                                  <i className="bi bi-trash"></i>
+                                </SecondaryButton>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr style={{ background: '#f8f9fa', fontWeight: 'bold' }}>
+                            <td colSpan="4" style={{ padding: '0.8rem', textAlign: 'right' }}>
+                              Total Return Amount:
+                            </td>
+                            <td style={{ padding: '0.8rem', fontSize: '1.1rem', color: '#e74c3c' }}>
+                              ₹{rtoFormData.totalAmount.toFixed(2)}
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '2rem',
+                      background: '#f8f9fa',
+                      borderRadius: '8px',
+                      border: '2px dashed #dee2e6'
+                    }}>
+                      <i className="bi bi-box" style={{ fontSize: '2rem', color: '#6c757d', marginBottom: '1rem' }}></i>
+                      <p style={{ color: '#6c757d', margin: 0 }}>No items added yet. Click "Add Item" to start.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Comments */}
+                <FormGroup>
+                  <Label>Additional Comments</Label>
+                  <TextArea
+                    value={rtoFormData.comments}
+                    onChange={(e) => handleRTOInputChange('comments', e.target.value)}
+                    placeholder="Enter any additional notes about the return..."
+                    rows="3"
+                  />
+                </FormGroup>
+              </ModalBody>
+              
+              <ModalFooter>
+                <SecondaryButton type="button" onClick={handleCloseRTOModal} disabled={loading}>
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton 
+                  type="submit" 
+                  disabled={loading}
+                  style={{ background: 'linear-gradient(to right, #e74c3c, #c0392b)' }}
+                >
+                  {loading ? (
+                    <>
+                      <i className="bi bi-arrow-clockwise spin" style={{ marginRight: '0.5rem' }}></i>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-check-circle" style={{ marginRight: '0.5rem' }}></i>
+                      Process Return
+                    </>
+                  )}
+                </PrimaryButton>
+              </ModalFooter>
+            </form>
+          </ModalContainer>
+        </ModalOverlay>
+      )}
+
+      {/* RPU (Return Pick Up) Modal */}
+      {showRPUModal && (
+        <ModalOverlay onClick={handleCloseRPUModal}>
+          <ModalContainer onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px' }}>
+            <ModalHeader>
+              <div>
+                <ModalTitle>
+                  <i className="bi bi-box-arrow-in-up" style={{ marginRight: '0.5rem' }}></i>
+                  Return Pick Up (RPU)
+                </ModalTitle>
+                <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.2rem' }}>
+                  Record customer return pickup (no inventory changes)
+                </div>
+              </div>
+              <CloseButton onClick={handleCloseRPUModal}>
+                <i className="bi bi-x"></i>
+              </CloseButton>
+            </ModalHeader>
+            <form onSubmit={handleRPUSubmit}>
+              <ModalBody>
+                {/* Customer Information */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h4 style={{ color: '#2c3e50', marginBottom: '1rem', borderBottom: '2px solid #e74c3c', paddingBottom: '0.5rem' }}>
+                    Customer Information
+                  </h4>
+                  <FormGrid>
+                    <FormGroup>
+                      <Label>Pickup Date</Label>
+                      <Input
+                        type="date"
+                        value={rpuFormData.returnDate}
+                        onChange={(e) => handleRPUInputChange('returnDate', e.target.value)}
+                        required
+                      />
+                    </FormGroup>
+                    <FormGroup>
+                      <Label>Customer Name</Label>
+                      <Input
+                        type="text"
+                        value={rpuFormData.customerName}
+                        onChange={(e) => handleRPUInputChange('customerName', e.target.value)}
+                        placeholder="Enter customer name"
+                        required
+                      />
+                    </FormGroup>
+                    <FormGroup>
+                      <Label>Customer Phone</Label>
+                      <Input
+                        type="tel"
+                        value={rpuFormData.customerPhone}
+                        onChange={(e) => handleRPUInputChange('customerPhone', e.target.value)}
+                        placeholder="Enter phone number"
+                      />
+                    </FormGroup>
+                    <FormGroup>
+                      <Label>Customer Email</Label>
+                      <Input
+                        type="email"
+                        value={rpuFormData.customerEmail}
+                        onChange={(e) => handleRPUInputChange('customerEmail', e.target.value)}
+                        placeholder="Enter email address"
+                      />
+                    </FormGroup>
+                    <FormGroup>
+                      <Label>Pickup Reason</Label>
+                      <Input
+                        type="text"
+                        value={rpuFormData.reason}
+                        onChange={(e) => handleRPUInputChange('reason', e.target.value)}
+                        placeholder="e.g., Defective, Wrong Item, Not as described"
+                      />
+                    </FormGroup>
+                  </FormGrid>
+                </div>
+
+                {/* Item Scanner Section */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h4 style={{ color: '#2c3e50', margin: 0, borderBottom: '2px solid #e74c3c', paddingBottom: '0.5rem' }}>
+                      Items to Process
+                    </h4>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <ActionButton 
+                        type="button" 
+                        onClick={toggleRPUBarcodeMode}
+                        style={{ 
+                          fontSize: '0.8rem', 
+                          padding: '0.3rem 0.8rem',
+                          backgroundColor: rpuBarcodeMode ? '#e74c3c' : '#95a5a6',
+                          color: 'white',
+                          border: 'none'
+                        }}
+                      >
+                        <i className={`bi bi-${rpuBarcodeMode ? 'keyboard' : 'upc-scan'}`} style={{ marginRight: '0.3rem' }}></i>
+                        {rpuBarcodeMode ? 'Manual Entry' : 'Scan Mode'}
+                      </ActionButton>
+                      <ActionButton 
+                        type="button" 
+                        onClick={rpuScannerActive ? stopRPUScanner : startRPUScanner}
+                        style={{ 
+                          fontSize: '0.8rem', 
+                          padding: '0.3rem 0.8rem',
+                          backgroundColor: rpuScannerActive ? '#e74c3c' : '#27ae60',
+                          color: 'white',
+                          border: 'none'
+                        }}
+                      >
+                        <i className={`bi bi-${rpuScannerActive ? 'stop-circle' : 'camera'}`} style={{ marginRight: '0.3rem' }}></i>
+                        {rpuScannerActive ? 'Stop Camera' : 'Start Camera'}
+                      </ActionButton>
+                    </div>
+                  </div>
+
+                  {/* Scanner Container */}
+                  {rpuScannerActive && (
+                    <div style={{ 
+                      marginBottom: '1rem', 
+                      border: '2px solid #e74c3c', 
+                      borderRadius: '8px', 
+                      overflow: 'hidden',
+                      position: 'relative'
+                    }}>
+                      <div 
+                        ref={rpuScannerRef} 
+                        style={{ 
+                          width: '100%', 
+                          height: '250px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: '#f8f9fa'
+                        }}
+                      />
+                      <div style={{
+                        position: 'absolute',
+                        top: '10px',
+                        left: '10px',
+                        backgroundColor: 'rgba(231, 76, 60, 0.9)',
+                        color: 'white',
+                        padding: '0.5rem',
+                        borderRadius: '4px',
+                        fontSize: '0.8rem'
+                      }}>
+                        <i className="bi bi-camera" style={{ marginRight: '0.3rem' }}></i>
+                        RPU Scanner Active
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Manual Barcode Input */}
+                  {rpuBarcodeMode && (
+                    <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <Input
+                        ref={rpuBarcodeInputRef}
+                        type="text"
+                        value={rpuScannedCode}
+                        onChange={(e) => setRPUScannedCode(e.target.value)}
+                        placeholder="Enter or scan barcode..."
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addRPUBarcodeManually();
+                          }
+                        }}
+                        style={{ flex: 1 }}
+                      />
+                      <ActionButton 
+                        type="button" 
+                        onClick={addRPUBarcodeManually}
+                        style={{ 
+                          padding: '0.5rem 1rem',
+                          backgroundColor: '#e74c3c',
+                          color: 'white',
+                          border: 'none'
+                        }}
+                      >
+                        <i className="bi bi-plus-circle" style={{ marginRight: '0.3rem' }}></i>
+                        Add Item
+                      </ActionButton>
+                    </div>
+                  )}
+
+                  {/* Scanned Code Display */}
+                  {rpuScannedCode && !rpuBarcodeMode && (
+                    <div style={{
+                      padding: '0.8rem',
+                      backgroundColor: '#d4edda',
+                      border: '1px solid #c3e6cb',
+                      borderRadius: '4px',
+                      marginBottom: '1rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span>
+                        <i className="bi bi-upc-scan" style={{ marginRight: '0.5rem', color: '#155724' }}></i>
+                        Scanned: <strong>{rpuScannedCode}</strong>
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Items List */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h5 style={{ color: '#2c3e50', margin: 0 }}>Items ({rpuFormData.items.length})</h5>
+                    <ActionButton 
+                      type="button" 
+                      onClick={handleAddRPUItem}
+                      style={{ 
+                        fontSize: '0.8rem', 
+                        padding: '0.3rem 0.8rem',
+                        backgroundColor: '#e74c3c',
+                        color: 'white',
+                        border: 'none'
+                      }}
+                    >
+                      <i className="bi bi-plus" style={{ marginRight: '0.3rem' }}></i>
+                      Add Item
+                    </ActionButton>
+                  </div>
+
+                  {rpuFormData.items.length === 0 ? (
+                    <div style={{
+                      padding: '2rem',
+                      textAlign: 'center',
+                      backgroundColor: '#f8f9fa',
+                      border: '2px dashed #dee2e6',
+                      borderRadius: '8px',
+                      color: '#6c757d'
+                    }}>
+                      <i className="bi bi-inbox" style={{ fontSize: '2rem', marginBottom: '1rem', display: 'block' }}></i>
+                      <p style={{ margin: 0, fontSize: '0.9rem' }}>
+                        No items added yet. Use the camera scanner or add items manually.
+                      </p>
+                    </div>
+                  ) : (
+                    <div style={{ 
+                      border: '1px solid #e0e0e0', 
+                      borderRadius: '8px',
+                      maxHeight: '300px',
+                      overflowY: 'auto'
+                    }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead style={{ backgroundColor: '#f8f9fa', position: 'sticky', top: 0 }}>
+                          <tr>
+                            <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #e0e0e0', fontSize: '0.85rem', fontWeight: '600' }}>Product</th>
+                            <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '1px solid #e0e0e0', fontSize: '0.85rem', fontWeight: '600', width: '100px' }}>Barcode</th>
+                            <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: '1px solid #e0e0e0', fontSize: '0.85rem', fontWeight: '600', width: '80px' }}>Qty</th>
+                            <th style={{ padding: '0.75rem', textAlign: 'right', borderBottom: '1px solid #e0e0e0', fontSize: '0.85rem', fontWeight: '600', width: '100px' }}>Unit Price</th>
+                            <th style={{ padding: '0.75rem', textAlign: 'right', borderBottom: '1px solid #e0e0e0', fontSize: '0.85rem', fontWeight: '600', width: '100px' }}>Total</th>
+                            <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: '1px solid #e0e0e0', fontSize: '0.85rem', fontWeight: '600', width: '50px' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rpuFormData.items.map((item, index) => (
+                            <tr key={index} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                              <td style={{ padding: '0.75rem' }}>
+                                <select
+                                  value={item.product}
+                                  onChange={(e) => handleRPUProductSelect(index, e.target.value)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '0.4rem',
+                                    border: '1px solid #ddd',
+                                    borderRadius: '4px',
+                                    fontSize: '0.85rem'
+                                  }}
+                                  required
+                                >
+                                  <option value="">Select Product</option>
+                                  {products.map(product => (
+                                    <option key={product._id} value={product._id}>
+                                      {product.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td style={{ padding: '0.75rem', fontSize: '0.8rem', color: '#666' }}>
+                                {item.barcode || '-'}
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <input
+                                  type="number"
+                                  value={item.quantity}
+                                  onChange={(e) => handleRPUItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
+                                  min="1"
+                                  style={{
+                                    width: '60px',
+                                    padding: '0.4rem',
+                                    border: '1px solid #ddd',
+                                    borderRadius: '4px',
+                                    textAlign: 'center',
+                                    fontSize: '0.85rem'
+                                  }}
+                                  required
+                                />
+                              </td>
+                              <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.85rem' }}>
+                                ${(item.unitPrice || 0).toFixed(2)}
+                              </td>
+                              <td style={{ padding: '0.75rem', textAlign: 'right', fontSize: '0.85rem', fontWeight: '600' }}>
+                                ${((item.unitPrice || 0) * (item.quantity || 0)).toFixed(2)}
+                              </td>
+                              <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveRPUItem(index)}
+                                  style={{
+                                    padding: '0.3rem',
+                                    backgroundColor: '#dc3545',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem'
+                                  }}
+                                >
+                                  <i className="bi bi-trash"></i>
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      {/* Total Section */}
+                      <div style={{
+                        padding: '1rem',
+                        backgroundColor: '#f8f9fa',
+                        borderTop: '2px solid #e0e0e0',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span style={{ fontSize: '1rem', fontWeight: '600', color: '#2c3e50' }}>
+                          Total Amount:
+                        </span>
+                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#e74c3c' }}>
+                          ${rpuFormData.totalAmount.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Comments Section */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <h4 style={{ color: '#2c3e50', marginBottom: '1rem', borderBottom: '2px solid #e74c3c', paddingBottom: '0.5rem' }}>
+                    Additional Notes
+                  </h4>
+                  <FormGroup>
+                    <Label>Comments/Notes</Label>
+                    <textarea
+                      value={rpuFormData.comments}
+                      onChange={(e) => handleRPUInputChange('comments', e.target.value)}
+                      placeholder="Additional notes about the pickup..."
+                      style={{
+                        width: '100%',
+                        minHeight: '80px',
+                        padding: '0.75rem',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        fontSize: '0.9rem',
+                        fontFamily: 'inherit',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </FormGroup>
+                </div>
+
+                {/* Info Alert */}
+                <div style={{
+                  padding: '1rem',
+                  backgroundColor: '#fff3cd',
+                  border: '1px solid #ffeaa7',
+                  borderRadius: '8px',
+                  marginBottom: '1rem',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}>
+                  <i className="bi bi-info-circle-fill" style={{ 
+                    color: '#856404', 
+                    fontSize: '1.2rem', 
+                    marginRight: '0.75rem',
+                    flexShrink: 0
+                  }}></i>
+                  <div style={{ fontSize: '0.9rem', color: '#856404' }}>
+                    <strong>Note:</strong> RPU (Return Pick Up) only records the transaction. 
+                    Product inventory quantities will <strong>NOT</strong> be modified during this process.
+                  </div>
+                </div>
+              </ModalBody>
+
+              <ModalFooter>
+                <SecondaryButton type="button" onClick={handleCloseRPUModal}>
+                  <i className="bi bi-x-circle" style={{ marginRight: '0.5rem' }}></i>
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton 
+                  type="submit" 
+                  disabled={loading || rpuFormData.items.length === 0}
+                  style={{ backgroundColor: '#e74c3c', borderColor: '#c0392b' }}
+                >
+                  {loading ? (
+                    <>
+                      <i className="bi bi-arrow-clockwise spin" style={{ marginRight: '0.5rem' }}></i>
+                      Recording...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-box-arrow-in-up" style={{ marginRight: '0.5rem' }}></i>
+                      Record Pickup
+                    </>
+                  )}
+                </PrimaryButton>
+              </ModalFooter>
+            </form>
+          </ModalContainer>
+        </ModalOverlay>
       )}
     </PageContainer>
   );

@@ -8,10 +8,12 @@ import Sidebar from './components/Layout/Sidebar';
 import Dashboard from './pages/Dashboard';
 import Vendors from './pages/Vendors';
 import Buyers from './pages/Buyers';
+import Categories from './pages/Categories';
 import Products from './pages/Products';
 import Purchases from './pages/Purchases';
 import Sales from './pages/Sales';
 import Inventory from './pages/Inventory';
+import Combos from './pages/Combos';
 
 function App() {
   return (
@@ -26,7 +28,9 @@ function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/vendors" element={<Vendors />} />
                 <Route path="/buyers" element={<Buyers />} />
+                <Route path="/categories" element={<Categories />} />
                 <Route path="/products" element={<Products />} />
+                <Route path="/combos" element={<Combos />} />
                 <Route path="/purchases" element={<Purchases />} />
                 <Route path="/sales" element={<Sales />} />
                 <Route path="/inventory" element={<Inventory />} />

@@ -340,7 +340,10 @@ import {
   Spinner,
   Badge,
   Toast,
-  ToastContainer
+  ToastContainer,
+  OverlayTrigger,
+  Tooltip,
+  Popover
 } from "react-bootstrap";
 import { salesAPI, buyersAPI, productsAPI, barcodesAPI } from "../services/api";
 import Quagga from "quagga";
@@ -1539,13 +1542,129 @@ const Sales = () => {
   const addScannedItem = async () => {
     if (!scannedCode) return;
     try {
+      // First, try the sales API scan endpoint to handle both products and combos
+      const response = await salesAPI.scanBarcode({ barcode: scannedCode });
+      const scannedItem = response.data;
+      
+      if (scannedItem.type === 'combo') {
+        // Handle combo barcode
+        const combo = scannedItem.combo;
+        
+        // Check if this combo barcode already exists in items
+        const existingItemIndex = formData.items.findIndex(item => item.barcode === scannedCode && item.type === 'combo');
+        
+        setFormData((prev) => {
+          let newItems = [...prev.items];
+          
+          if (existingItemIndex !== -1) {
+            // Increment quantity of existing combo
+            newItems[existingItemIndex] = {
+              ...newItems[existingItemIndex],
+              quantity: (newItems[existingItemIndex].quantity || 1) + 1
+            };
+          } else {
+            // Add new combo item
+            newItems.push({
+              type: 'combo',
+              combo: combo._id,
+              comboData: combo,
+              quantity: 1,
+              unitPrice: combo.price,
+              barcode: scannedCode,
+            });
+          }
+          
+          // Recalculate totals with new items
+          return calculateTotals({
+            ...prev,
+            items: newItems
+          });
+        });
+        
+        showSuccess(`Combo "${combo.name}" added to cart`);
+        setScannedCode("");
+        setError("");
+        
+      } else if (scannedItem.type === 'product') {
+        // Handle product barcode (existing logic)
+        const product = scannedItem.product;
+        
+        // Calculate how much of this product is already in the cart
+        const existingCartQuantity = formData.items
+          .filter(item => item.barcode === scannedCode && item.type !== 'combo')
+          .reduce((total, item) => total + (item.quantity || 0), 0);
+        
+        // Calculate real-time available stock
+        const realTimeStock = product.quantity - existingCartQuantity;
+        
+        // Check real-time stock levels
+        if (realTimeStock <= 0) {
+          showError(`Out of Stock: ${product.name} is currently out of stock or all available quantity is already in cart. Available: ${realTimeStock}, In Cart: ${existingCartQuantity}`);
+          setScannedCode("");
+          return;
+        } else if (realTimeStock <= product.minquantity) {
+          showWarning(`Low Stock Alert: ${product.name} Available after scan: ${realTimeStock - 1}, Minimum: ${product.minquantity}, Currently in cart: ${existingCartQuantity+1}`);
+        }
+        
+        setFormData((prev) => {
+          // Check if this product barcode already exists in items
+          const existingItemIndex = prev.items.findIndex(item => item.barcode === scannedCode && item.type !== 'combo');
+          
+          let newItems = [...prev.items];
+          
+          if (existingItemIndex !== -1) {
+            // Increment quantity of existing item
+            newItems[existingItemIndex] = {
+              ...newItems[existingItemIndex],
+              quantity: (newItems[existingItemIndex].quantity || 1) + 1
+            };
+          } else {
+            // Add new product item
+            newItems.push({
+              type: 'product',
+              product: product._id,
+              productData: product,
+              quantity: 1,
+              unitPrice: product.price,
+              barcode: scannedCode,
+            });
+          }
+          
+          // Recalculate totals with new items
+          return calculateTotals({
+            ...prev,
+            items: newItems
+          });
+        });
+        
+        showSuccess(`Product "${product.name}" added to cart`);
+        setScannedCode("");
+        setError("");
+      }
+      
+      // Only stop and restart scanner if it was already active
+      if (scannerActive) {
+        stopScanner();
+        setTimeout(() => {
+          startScanner();
+        }, 1000);
+      }
+    } catch (error) {
+      // Fallback: try to find in cached products if sales API fails
+      await fallbackToProductsAPI();
+    }
+  };
+
+  // Helper function to use cached products as fallback
+  const fallbackToProductsAPI = async () => {
+    try {
       // First, try to get product directly from products using the barcode
       const productMatch = products.find(p => p.barcode === scannedCode);
       
       if (productMatch) {
         // Calculate how much of this product is already in the cart
         const existingCartQuantity = formData.items
-          .filter(item => item.barcode === scannedCode)
+          .filter(item => item.barcode === scannedCode && item.type !== 'combo')
           .reduce((total, item) => total + (item.quantity || 0), 0);
         
         // Calculate real-time available stock
@@ -1576,7 +1695,7 @@ const Sales = () => {
         
         setFormData((prev) => {
           // Check if this barcode already exists in items
-          const existingItemIndex = prev.items.findIndex(item => item.barcode === scannedCode);
+          const existingItemIndex = prev.items.findIndex(item => item.barcode === scannedCode && item.type !== 'combo');
           
           let newItems = [...prev.items];
           
@@ -1589,6 +1708,7 @@ const Sales = () => {
           } else {
             // Add new item with enhanced product details
             newItems.push({
+              type: 'product',
               product: enhancedProduct._id,
               productData: enhancedProduct,
               quantity: 1,
@@ -1604,10 +1724,11 @@ const Sales = () => {
           });
         });
         
+        showSuccess(`Product "${productMatch.name}" added to cart`);
         setScannedCode("");
         setError("");
       } else {
-        // If not found in cached products, try to fetch the product by barcode
+        // Try to fetch product by barcode API
         try {
           const productResponse = await productsAPI.getByBarcode(scannedCode);
           if (productResponse.data) {
@@ -1615,7 +1736,7 @@ const Sales = () => {
             
             // Calculate how much of this product is already in the cart
             const existingCartQuantity = formData.items
-              .filter(item => item.barcode === scannedCode)
+              .filter(item => item.barcode === scannedCode && item.type !== 'combo')
               .reduce((total, item) => total + (item.quantity || 0), 0);
             
             // Calculate real-time available stock
@@ -1646,7 +1767,7 @@ const Sales = () => {
             
             setFormData((prev) => {
               // Check if this barcode already exists in items
-              const existingItemIndex = prev.items.findIndex(item => item.barcode === scannedCode);
+              const existingItemIndex = prev.items.findIndex(item => item.barcode === scannedCode && item.type !== 'combo');
               
               let newItems = [...prev.items];
               
@@ -1659,6 +1780,7 @@ const Sales = () => {
               } else {
                 // Add new item with enhanced product details
                 newItems.push({
+                  type: 'product',
                   product: enhancedProduct._id,
                   productData: enhancedProduct,
                   quantity: 1,
@@ -1674,124 +1796,20 @@ const Sales = () => {
               });
             });
             
+            showSuccess(`Product "${enhancedProduct.name}" added to cart`);
             setScannedCode("");
             setError("");
           } else {
-            // If product not found by barcode, fall back to the sales API scan endpoint
-            await fallbackToSalesAPI();
+            throw new Error('Product not found');
           }
         } catch (err) {
-          // If there's an error getting product by barcode, fall back to sales API
-          await fallbackToSalesAPI();
+          showError(`Invalid or unknown barcode: ${scannedCode}`);
+          setScannedCode("");
         }
-      }
-      
-      // Only stop and restart scanner if it was already active
-      if (scannerActive) {
-        stopScanner();
-        setTimeout(() => {
-          startScanner();
-        }, 1000); // short delay to allow camera to reset
       }
     } catch (error) {
-      showError(`Invalid or sold barcode: ${scannedCode}`);
-      setScannedCode(""); // Clear the code after error
-    }
-  };
-
-  // Helper function to use the sales API as fallback
-  const fallbackToSalesAPI = async () => {
-    try {
-      const response = await salesAPI.scanBarcode({ barcode: scannedCode });
-      const scannedItem = response.data;
-      
-      // Get more detailed product info if available
-      let productDetails = null;
-      try {
-        if (scannedItem && scannedItem.product && scannedItem.product._id) {
-          const productResponse = await productsAPI.getById(scannedItem.product._id);
-          productDetails = productResponse.data;
-        }
-      } catch (productError) {
-        console.error("Failed to fetch detailed product info:", productError);
-      }
-      
-      // Calculate how much of this product is already in the cart
-      const existingCartQuantity = formData.items
-        .filter(item => item.barcode === scannedCode)
-        .reduce((total, item) => total + (item.quantity || 0), 0);
-      
-      // Calculate real-time available stock
-      const realTimeStock = (productDetails?.quantity || 0) - existingCartQuantity;
-      
-      // Combine the product data from the scan response with our additional product details
-      const enhancedProduct = {
-        ...scannedItem.product,
-        name: productDetails?.name || scannedItem.product?.name || 'Unknown Product',
-        category: productDetails?.category || scannedItem.product?.category || 'Unknown',
-        description: productDetails?.description || scannedItem.product?.description || '',
-        currentStock: productDetails?.quantity || 0,
-        realTimeStock: realTimeStock,
-        minStock: productDetails?.minquantity || 0
-      };
-      
-      // Check real-time stock levels and handle accordingly
-      if (realTimeStock <= 0) {
-        // Block sales if real-time stock is 0 or negative
-        showError(`Out of Stock: ${enhancedProduct.name} is currently out of stock or all available quantity is already in cart. Available: ${realTimeStock}, In Cart: ${existingCartQuantity}`);
-        setScannedCode("");
-        return; // Exit function to prevent adding the item
-      } else if (productDetails && realTimeStock <= productDetails.minquantity) {
-        // Show warning but allow sales if real-time stock <= minquantity (but not 0)
-        setLowStockAlert({
-          productName: enhancedProduct.name,
-          currentStock: productDetails.quantity,
-          realTimeStock: realTimeStock,
-          afterScanStock: realTimeStock - 1,
-          minStock: productDetails.minquantity,
-          inCart: existingCartQuantity
-        });
-        
-        setTimeout(() => {
-          setLowStockAlert(null);
-        }, 5000);
-      }
-      
-      setFormData((prev) => {
-        // Check if this barcode already exists in items
-        const existingItemIndex = prev.items.findIndex(item => item.barcode === scannedCode);
-        
-        let newItems = [...prev.items];
-        
-        if (existingItemIndex !== -1) {
-          // Increment quantity of existing item
-          newItems[existingItemIndex] = {
-            ...newItems[existingItemIndex],
-            quantity: (newItems[existingItemIndex].quantity || 1) + 1
-          };
-        } else {
-          // Add new item with enhanced product details
-          newItems.push({
-            product: enhancedProduct._id, // Store just the ID for submission
-            productData: enhancedProduct, // Store full object for display
-            quantity: 1,
-            unitPrice: scannedItem.price,
-            barcode: scannedCode,
-          });
-        }
-        
-        // Recalculate totals with new items
-        return calculateTotals({
-          ...prev,
-          items: newItems
-        });
-      });
-      
+      showError(`Error processing barcode: ${scannedCode}`);
       setScannedCode("");
-      setError("");
-      setSuccess("");
-    } catch (error) {
-      throw error; // Re-throw to be caught by parent function
     }
   };
 
@@ -1884,11 +1902,22 @@ const Sales = () => {
     const stockIssues = [];
     const productQuantityMap = new Map();
     
-    // Calculate total quantities needed for each product
+    // Calculate total quantities needed for each product (including combo products)
     formData.items.forEach(item => {
-      const productId = item.product;
-      const currentQuantity = productQuantityMap.get(productId) || 0;
-      productQuantityMap.set(productId, currentQuantity + item.quantity);
+      if (item.type === 'combo' && item.comboData?.products) {
+        // For combos, add up all the individual product requirements
+        item.comboData.products.forEach(comboProduct => {
+          const productId = comboProduct.product?._id || comboProduct.product;
+          const currentQuantity = productQuantityMap.get(productId) || 0;
+          const neededQuantity = comboProduct.quantity * item.quantity;
+          productQuantityMap.set(productId, currentQuantity + neededQuantity);
+        });
+      } else if (item.type === 'product' || !item.type) {
+        // For regular products
+        const productId = item.product;
+        const currentQuantity = productQuantityMap.get(productId) || 0;
+        productQuantityMap.set(productId, currentQuantity + item.quantity);
+      }
     });
     
     // Check each product's real-time stock
@@ -1914,12 +1943,25 @@ const Sales = () => {
         ...formData,
         saleDate: convertToApiDate(formData.saleDate), // Convert date to proper format
         // Map items to the format expected by the API
-        items: formData.items.map(item => ({
-          product: item.product, // Just send the ID
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          barcode: item.barcode // Include barcode in the API request
-        }))
+        items: formData.items.map(item => {
+          if (item.type === 'combo') {
+            return {
+              type: 'combo',
+              combo: item.combo, // Send combo ID
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              barcode: item.barcode
+            };
+          } else {
+            return {
+              type: 'product',
+              product: item.product, // Send product ID
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              barcode: item.barcode
+            };
+          }
+        })
       };
       
       await salesAPI.create(formattedData);
@@ -1958,6 +2000,14 @@ const Sales = () => {
           saleData.items.map(async (item, index) => {
             console.log(`Processing item ${index}:`, item);
             
+            // Check if this is a combo item
+            if (item.type === 'combo') {
+              console.log(`Combo item detected:`, item);
+              // For combo items, just return as-is since they should be properly populated by the backend
+              return item;
+            }
+            
+            // Handle regular product items
             let productData = item.product;
             
             // If product details are missing or incomplete and barcode exists
@@ -2040,6 +2090,13 @@ const Sales = () => {
       if (saleData.items && saleData.items.length > 0) {
         const enhancedItems = await Promise.all(
           saleData.items.map(async (item) => {
+            // Check if this is a combo item
+            if (item.type === 'combo') {
+              // For combo items, just return as-is since they should be properly populated by the backend
+              return item;
+            }
+            
+            // Handle regular product items
             let productData = item.product;
             
             // If product details are missing or incomplete and barcode exists
@@ -2419,27 +2476,53 @@ const Sales = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {formData.items.map((item, index) => (
-                    <tr key={index} className={item.productData?.currentStock <= item.productData?.minStock ? 'table-warning' : ''}>
-                      <td>{index + 1}</td>
-                      <td><BarcodeBadge>{item.barcode}</BarcodeBadge></td>
-                      <td>
-                        <div style={{ fontWeight: 'bold' }}>{item.productData?.name || 'N/A'}</div>
-                        {item.productData?.description && (
-                          <small className="text-muted">{item.productData.description.substring(0, 30)}{item.productData.description.length > 30 ? '...' : ''}</small>
-                        )}
-                      </td>
-                      <td>{item.productData?.category || 'Unknown'}</td>
-                      <td>{item.unitPrice.toFixed(2)}</td>
-                      <td>{item.quantity}</td>
-                      <td>{(item.unitPrice * item.quantity).toFixed(2)}</td>
-                      <td>
-                        <DangerButton variant="outline-danger" size="sm" onClick={() => removeItem(index)}>
-                          Remove
-                        </DangerButton>
-                      </td>
-                    </tr>
-                  ))}
+                  {formData.items.map((item, index) => {
+                    const isCombo = item.type === 'combo';
+                    const itemData = isCombo ? item.comboData : item.productData;
+                    const itemName = itemData?.name || 'N/A';
+                    const itemDescription = itemData?.description || '';
+                    const itemCategory = isCombo ? 'Combo Package' : (itemData?.category || 'Unknown');
+                    const lowStock = !isCombo && itemData?.currentStock <= itemData?.minStock;
+                    
+                    return (
+                      <tr key={index} className={lowStock ? 'table-warning' : ''}>
+                        <td>{index + 1}</td>
+                        <td>
+                          <BarcodeBadge bg={isCombo ? 'success' : 'info'}>
+                            {item.barcode}
+                          </BarcodeBadge>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 'bold' }}>
+                            {isCombo && <span className="badge bg-success me-1">COMBO</span>}
+                            {itemName}
+                          </div>
+                          {itemDescription && (
+                            <small className="text-muted">
+                              {itemDescription.substring(0, 30)}
+                              {itemDescription.length > 30 ? '...' : ''}
+                            </small>
+                          )}
+                          {isCombo && item.comboData?.products && (
+                            <div className="mt-1">
+                              <small className="text-info">
+                                Contains: {item.comboData.products.map(p => `${p.product?.name || 'Product'} (${p.quantity})`).join(', ')}
+                              </small>
+                            </div>
+                          )}
+                        </td>
+                        <td>{itemCategory}</td>
+                        <td>{item.unitPrice.toFixed(2)}</td>
+                        <td>{item.quantity}</td>
+                        <td>{(item.unitPrice * item.quantity).toFixed(2)}</td>
+                        <td>
+                          <DangerButton variant="outline-danger" size="sm" onClick={() => removeItem(index)}>
+                            Remove
+                          </DangerButton>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr>
@@ -2645,33 +2728,145 @@ const Sales = () => {
                   </thead>
                   <tbody>
                     {(selectedSale.items || []).map((item, idx) => {
-                      const product = item.product || {};
-                      const productName = product.name || item.productData?.name || 'Product Not Found';
-                      const productCategory = product.category || item.productData?.category || 'N/A';
-                      const productDescription = product.description || item.productData?.description || '';
-                      const unitPrice = item.unitPrice || product.price || item.productData?.price || 0;
-                      const barcode = item.barcode || product.barcode || 'N/A';
+                      const isCombo = item.type === 'combo';
+                      
+                      let itemName, itemCategory, itemDescription, unitPrice, barcode;
+                      
+                      if (isCombo) {
+                        // Handle combo items
+                        const combo = item.combo || {};
+                        itemName = item.comboName || combo.name || 'Combo Not Found';
+                        itemCategory = 'Combo Package';
+                        itemDescription = combo.description || '';
+                        unitPrice = item.unitPrice || combo.price || 0;
+                        barcode = item.barcode || combo.barcode || 'N/A';
+                      } else {
+                        // Handle regular product items
+                        const product = item.product || {};
+                        itemName = product.name || item.productData?.name || 'Product Not Found';
+                        itemCategory = product.category || item.productData?.category || 'N/A';
+                        itemDescription = product.description || item.productData?.description || '';
+                        unitPrice = item.unitPrice || product.price || item.productData?.price || 0;
+                        barcode = item.barcode || product.barcode || 'N/A';
+                      }
+                      
                       const quantity = item.quantity || 1;
                       const itemTotal = unitPrice * quantity;
+                      
                       return (
                         <tr key={item._id || idx}>
                           <td>{idx + 1}</td>
                           <td>
                             <div>
-                              <strong>{productName}</strong>
-                              {productDescription && (
+                              {isCombo && <Badge bg="success" className="me-2">COMBO</Badge>}
+                              {isCombo ? (
+                                <OverlayTrigger
+                                  trigger={['hover', 'focus']}
+                                  placement="right"
+                                  overlay={
+                                    <Popover id={`combo-popover-${idx}`} style={{ maxWidth: '400px' }}>
+                                      <Popover.Header as="h3" className="bg-success text-white">
+                                        <strong>📦 Combo Products</strong>
+                                      </Popover.Header>
+                                      <Popover.Body>
+                                        {item.combo?.products && item.combo.products.length > 0 ? (
+                                          <div>
+                                            <div className="mb-2">
+                                              <small className="text-muted">
+                                                <strong>Combo:</strong> {itemName}
+                                              </small>
+                                            </div>
+                                            <Table size="sm" className="mb-0">
+                                              <thead>
+                                                <tr>
+                                                  <th>Product</th>
+                                                  <th>Qty</th>
+                                                  <th>Price</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {item.combo.products.map((comboProduct, cpIdx) => (
+                                                  <tr key={cpIdx}>
+                                                    <td>
+                                                      <small>
+                                                        <strong>{comboProduct.product?.name || 'N/A'}</strong>
+                                                        <br />
+                                                        <span className="text-muted">
+                                                          {comboProduct.product?.barcode || 'No barcode'}
+                                                        </span>
+                                                      </small>
+                                                    </td>
+                                                    <td>
+                                                      <Badge bg="secondary">
+                                                        {comboProduct.quantity || 1}
+                                                      </Badge>
+                                                    </td>
+                                                    <td>
+                                                      <small>
+                                                        ₹{(comboProduct.product?.price || 0).toFixed(2)}
+                                                      </small>
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                              <tfoot>
+                                                <tr className="table-light">
+                                                  <td colSpan="2"><strong>Total Value</strong></td>
+                                                  <td>
+                                                    <strong>
+                                                      ₹{item.combo.products.reduce((total, cp) => 
+                                                        total + ((cp.product?.price || 0) * (cp.quantity || 1)), 0
+                                                      ).toFixed(2)}
+                                                    </strong>
+                                                  </td>
+                                                </tr>
+                                              </tfoot>
+                                            </Table>
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted">No products found in this combo</span>
+                                        )}
+                                      </Popover.Body>
+                                    </Popover>
+                                  }
+                                >
+                                  <span 
+                                    className="combo-hover-item"
+                                    style={{ 
+                                      cursor: 'help', 
+                                      textDecoration: 'underline dotted',
+                                      color: '#198754',
+                                      fontWeight: 'bold',
+                                      position: 'relative'
+                                    }}
+                                    title="Hover to see combo products"
+                                  >
+                                    {itemName}
+                                    <small className="ms-1" style={{ fontSize: '0.7rem' }}>
+                                      ℹ️
+                                    </small>
+                                  </span>
+                                </OverlayTrigger>
+                              ) : (
+                                <strong>{itemName}</strong>
+                              )}
+                              {itemDescription && (
                                 <div>
                                   <small className="text-muted">
-                                    {productDescription.length > 50 
-                                      ? `${productDescription.substring(0, 50)}...` 
-                                      : productDescription}
+                                    {itemDescription.length > 50 
+                                      ? `${itemDescription.substring(0, 50)}...` 
+                                      : itemDescription}
                                   </small>
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td>{productCategory}</td>
-                          <td><BarcodeBadge>{barcode}</BarcodeBadge></td>
+                          <td>{itemCategory}</td>
+                          <td>
+                            <BarcodeBadge bg={isCombo ? 'success' : 'info'}>
+                              {barcode}
+                            </BarcodeBadge>
+                          </td>
                           <td>₹{unitPrice.toFixed(2)}</td>
                           <td>{quantity}</td>
                           <td>₹{itemTotal.toFixed(2)}</td>
@@ -2807,18 +3002,99 @@ const Sales = () => {
                   </thead>
                   <tbody>
                     {(invoiceData.items || []).map((item, idx) => {
-                      const product = item.product || {};
-                      const productName = product.name || item.productData?.name || 'Product Not Found';
-                      const productCategory = product.category || item.productData?.category || 'N/A';
-                      const unitPrice = item.unitPrice || product.price || item.productData?.price || 0;
-                      const barcode = item.barcode || product.barcode || 'N/A';
+                      const isCombo = item.type === 'combo';
+                      
+                      let itemName, itemCategory, unitPrice, barcode;
+                      
+                      if (isCombo) {
+                        // Handle combo items
+                        const combo = item.combo || {};
+                        itemName = item.comboName || combo.name || 'Combo Not Found';
+                        itemCategory = 'Combo Package';
+                        unitPrice = item.unitPrice || combo.price || 0;
+                        barcode = item.barcode || combo.barcode || 'N/A';
+                      } else {
+                        // Handle regular product items
+                        const product = item.product || {};
+                        itemName = product.name || item.productData?.name || 'Product Not Found';
+                        itemCategory = product.category || item.productData?.category || 'N/A';
+                        unitPrice = item.unitPrice || product.price || item.productData?.price || 0;
+                        barcode = item.barcode || product.barcode || 'N/A';
+                      }
+                      
                       const quantity = item.quantity || 1;
                       const itemTotal = unitPrice * quantity;
+                      
                       return (
                         <tr key={item._id || idx}>
                           <td>{idx + 1}</td>
-                          <td>{productName}</td>
-                          <td>{productCategory}</td>
+                          <td>
+                            {isCombo ? (
+                              <OverlayTrigger
+                                trigger={['hover', 'focus']}
+                                placement="right"
+                                overlay={
+                                  <Popover id={`invoice-combo-popover-${idx}`} style={{ maxWidth: '350px' }}>
+                                    <Popover.Header as="h3" className="bg-success text-white">
+                                      <strong>📦 Combo Breakdown</strong>
+                                    </Popover.Header>
+                                    <Popover.Body>
+                                      {item.combo?.products && item.combo.products.length > 0 ? (
+                                        <div>
+                                          <div className="mb-2">
+                                            <small className="text-muted">
+                                              <strong>Combo:</strong> {itemName}
+                                            </small>
+                                          </div>
+                                          {item.combo.products.map((comboProduct, cpIdx) => (
+                                            <div key={cpIdx} className="mb-2 pb-2" style={{borderBottom: cpIdx < item.combo.products.length - 1 ? '1px solid #dee2e6' : 'none'}}>
+                                              <div>
+                                                <strong>{comboProduct.product?.name || 'N/A'}</strong>
+                                              </div>
+                                              <div className="d-flex justify-content-between">
+                                                <small className="text-muted">
+                                                  Quantity: <Badge bg="secondary">{comboProduct.quantity || 1}</Badge>
+                                                </small>
+                                                <small className="text-muted">
+                                                  ₹{(comboProduct.product?.price || 0).toFixed(2)}
+                                                </small>
+                                              </div>
+                                            </div>
+                                          ))}
+                                          <div className="mt-2 pt-2 border-top">
+                                            <div className="d-flex justify-content-between">
+                                              <strong>Total Value:</strong>
+                                              <strong className="text-success">
+                                                ₹{item.combo.products.reduce((total, cp) => 
+                                                  total + ((cp.product?.price || 0) * (cp.quantity || 1)), 0
+                                                ).toFixed(2)}
+                                              </strong>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <span className="text-muted">No products found</span>
+                                      )}
+                                    </Popover.Body>
+                                  </Popover>
+                                }
+                              >
+                                <span 
+                                  style={{ 
+                                    cursor: 'help', 
+                                    textDecoration: 'underline dotted',
+                                    color: '#198754'
+                                  }}
+                                  title="Hover to see combo products"
+                                >
+                                  [COMBO] {itemName} ℹ️
+                                </span>
+                              </OverlayTrigger>
+                            ) : (
+                              itemName
+                            )}
+                          </td>
+                          <td>{itemCategory}</td>
                           <td>{barcode}</td>
                           <td>₹{unitPrice.toFixed(2)}</td>
                           <td>{quantity}</td>

@@ -11,6 +11,7 @@ exports.getAllProducts = async (req, res) => {
   try {
     const products = await Product.find()
       .populate('vendor', 'name contactPerson')
+      .populate('category', 'name code')
       .sort({ createdAt: -1 });
 
       
@@ -24,7 +25,23 @@ exports.getAllProducts = async (req, res) => {
 exports.getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
-      .populate('vendor', 'name contactPerson phone');
+      .populate('vendor', 'name contactPerson phone')
+      .populate('category', 'name code');
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    res.json(product);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get product by barcode
+exports.getProductByBarcode = async (req, res) => {
+  try {
+    const product = await Product.findOne({ barcode: req.params.barcode })
+      .populate('vendor', 'name contactPerson phone')
+      .populate('category', 'name code');
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
@@ -37,18 +54,33 @@ exports.getProductById = async (req, res) => {
 // Create new product
 exports.createProduct = async (req, res) => {
   try {
-    const BarcodeCounter = require('../models/BarcodeCounter');
-    const prefix = 'IM001VP';
-    const lastProduct = await Product.findOne({ barcode: new RegExp(`^${prefix}`) })
-      .sort({ barcode: -1 });
+    const Category = require('../models/Category');
+    const ProductCounter = require('../models/ProductCounter');
+    
+    // Get category information
+    const category = await Category.findById(req.body.category);
+    if (!category) {
+      return res.status(400).json({ message: 'Invalid category selected' });
+    }
 
-    let nextNumber = 1;
-    if (lastProduct && lastProduct.barcode) {
-      const match = lastProduct.barcode.match(/\d+$/);
-      if (match) {
-        nextNumber = parseInt(match[0], 10) + 1;
-      }
-    }const barcode = `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+    // Generate barcode with category code
+    let counter = await ProductCounter.findOne({ categoryCode: category.code });
+    
+    if (!counter) {
+      // Create new counter for this category
+      counter = new ProductCounter({ 
+        categoryCode: category.code, 
+        counter: 1 
+      });
+    } else {
+      // Increment existing counter
+      counter.counter += 1;
+    }
+    
+    await counter.save();
+    
+    // Generate barcode: IM + categoryCode + VP + 4-digit counter
+    const barcode = `IM${category.code}VP${counter.counter.toString().padStart(4, '0')}`;
 
     // Upload image if provided
     let imageUrl = null;

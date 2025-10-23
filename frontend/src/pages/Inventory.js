@@ -680,7 +680,11 @@ const Inventory = () => {
                     {productColumns.id ? product.barcode : <span style={{ color: '#ccc' }}>---</span>}
                   </td>
                   <td>
-                    {productColumns.category ? (product.category || 'Uncategorized') : <span style={{ color: '#ccc' }}>---</span>}
+                    {productColumns.category ? (
+                      typeof product.category === 'object' 
+                        ? product.category?.name || 'Uncategorized'
+                        : product.category || 'Uncategorized'
+                    ) : <span style={{ color: '#ccc' }}>---</span>}
                   </td>
                   <td>
                     {productColumns.stockLevel ? (

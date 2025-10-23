@@ -12,10 +12,30 @@ const saleSchema = new mongoose.Schema({
     required: true
   },
   items: [{
+    type: {
+      type: String,
+      enum: ['product', 'combo'],
+      default: 'product'
+    },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',
-      required: true
+      required: function() {
+        return this.type === 'product';
+      }
+    },
+    combo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Combo',
+      required: function() {
+        return this.type === 'combo';
+      }
+    },
+    comboName: {
+      type: String,
+      required: function() {
+        return this.type === 'combo';
+      }
     },
     quantity: {
       type: Number,

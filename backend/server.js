@@ -21,10 +21,13 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/vendors', require('./routes/vendors'));
 app.use('/api/buyers', require('./routes/buyers'));
 app.use('/api/products', require('./routes/products'));
+app.use('/api/categories', require('./routes/categories'));
 app.use('/api/purchases', require('./routes/purchases'));
 app.use('/api/sales', require('./routes/sales'));
+app.use('/api/returns', require('./routes/returns'));
 app.use('/api/barcodes', require('./routes/barcodes'));
 app.use('/api/barcode', require('./routes/barcode'));
+app.use('/api/combos', require('./routes/combos'));
 
 // PDF generation endpoints
 app.get('/api/purchases/:id/invoice', async (req, res) => {
