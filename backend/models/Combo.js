@@ -18,7 +18,11 @@ const comboSchema = new mongoose.Schema({
   comboId: {
     type: String,
     unique: true,
-    required: true
+    default: function() {
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 1000);
+      return `COMBO-${timestamp}-${random}`;
+    }
   },
   name: {
     type: String,
@@ -58,14 +62,16 @@ const comboSchema = new mongoose.Schema({
 comboSchema.pre('save', async function(next) {
   if (this.isNew && !this.comboId) {
     try {
-      const count = await mongoose.model('Combo').countDocuments();
+      const count = await this.constructor.countDocuments();
       const timestamp = Date.now();
       const random = Math.floor(Math.random() * 1000);
       this.comboId = `COMBO-${timestamp}-${count + 1}-${random}`;
     } catch (error) {
       console.error('Error generating comboId:', error);
       // Fallback ID generation
-      this.comboId = `COMBO-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 10000);
+      this.comboId = `COMBO-${timestamp}-${random}`;
     }
   }
   next();
