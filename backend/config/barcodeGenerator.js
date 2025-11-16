@@ -88,6 +88,8 @@ const generateVPFashionsBarcode = async (itemName, barcodeId) => {
     ctx.drawImage(barcodeImage, 20, 40);
 
     // Step 5: Add bottom texts
+    if(itemName==null)
+        itemName="";
   ctx.font = 'bold 40px Arial';
   ctx.fillText(`ID No: ${barcodeId}`, canvasWidth / 2, barcodeImage.height + 50);
   ctx.fillText(`${itemName}`, canvasWidth / 2, barcodeImage.height + 85);

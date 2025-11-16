@@ -28,6 +28,16 @@ app.use('/api/returns', require('./routes/returns'));
 app.use('/api/barcodes', require('./routes/barcodes'));
 app.use('/api/barcode', require('./routes/barcode'));
 app.use('/api/combos', require('./routes/combos'));
+app.use('/api/reports', require('./routes/reports'));
+app.use('/api/profit-loss', require('./routes/profitLoss'));
+app.use('/api/rto-products', require('./routes/rtoProducts'));
+app.use('/api/uploaded-profit-sheets', require('./routes/uploadedProfitSheets'));
+app.use('/api/product-masters', require('./routes/productMasters'));
+
+// Debug: Log all routes
+console.log('✓ Routes registered successfully');
+console.log('✓ /api/rto-products endpoint available');
+console.log('✓ /api/uploaded-profit-sheets endpoint available');
 
 // PDF generation endpoints
 app.get('/api/purchases/:id/invoice', async (req, res) => {

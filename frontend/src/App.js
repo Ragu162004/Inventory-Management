@@ -14,6 +14,10 @@ import Purchases from './pages/Purchases';
 import Sales from './pages/Sales';
 import Inventory from './pages/Inventory';
 import Combos from './pages/Combos';
+import Reports from './pages/Reports';
+import ProfitLoss from './pages/ProfitLoss';
+import RTOProducts from './pages/RTOProducts';
+import UploadedDataManagement from './pages/UploadedDataManagement';
 
 function App() {
   return (
@@ -34,6 +38,10 @@ function App() {
                 <Route path="/purchases" element={<Purchases />} />
                 <Route path="/sales" element={<Sales />} />
                 <Route path="/inventory" element={<Inventory />} />
+                <Route path="/reports" element={<Reports />} />
+                <Route path="/profit-loss" element={<ProfitLoss />} />
+                <Route path="/rto-products" element={<RTOProducts />} />
+                <Route path="/uploaded-data" element={<UploadedDataManagement />} />
               </Routes>
             </main>
           </div>

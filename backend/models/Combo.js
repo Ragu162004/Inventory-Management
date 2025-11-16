@@ -40,6 +40,11 @@ const comboSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  category: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    default: null
+  },
   price: {
     type: Number,
     required: true,
@@ -49,6 +54,10 @@ const comboSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  isMapped: {
+    type: Boolean,
+    default: false
   },
   imageUrl: {
     type: String,

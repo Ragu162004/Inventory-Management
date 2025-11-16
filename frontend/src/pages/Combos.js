@@ -12,9 +12,11 @@ import {
   Badge,
   Spinner,
   Toast,
-  ToastContainer
+  ToastContainer,
+  Tabs,
+  Tab
 } from 'react-bootstrap';
-import { combosAPI, productsAPI } from '../services/api';
+import { combosAPI, productsAPI, productMastersAPI, barcodesAPI, categoriesAPI } from '../services/api';
 import styled, { keyframes } from 'styled-components';
 
 // Animations
@@ -181,6 +183,7 @@ const LoadingSpinner = styled(Spinner)`
 const Combos = () => {
   const [combos, setCombos] = useState([]);
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedCombo, setSelectedCombo] = useState(null);
@@ -192,11 +195,36 @@ const Combos = () => {
   // Toast notifications
   const [toasts, setToasts] = useState([]);
 
+  // Unmapped combos (combos without product mapping)
+  const [unmappedCombos, setUnmappedCombos] = useState([]);
+  const [unmappedLoading, setUnmappedLoading] = useState(false);
+  const [mappingStats, setMappingStats] = useState({
+    totalCombos: 0,
+    mappedCombos: 0,
+    unmappedCombos: 0
+  });
+
+  // Excel upload
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+
+  // Product mapping modal
+  const [showMappingModal, setShowMappingModal] = useState(false);
+  const [selectedComboForMapping, setSelectedComboForMapping] = useState(null);
+  const [mappingProducts, setMappingProducts] = useState([]);
+
+  // Checkbox selection for barcode download
+  const [selectedCombos, setSelectedCombos] = useState([]);
+  const [isDownloadingBarcodes, setIsDownloadingBarcodes] = useState(false);
+
   // Form data
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     barcode: '',
+    category: '',
     products: [],
     image: null
   });
@@ -214,7 +242,9 @@ const Combos = () => {
       setLoading(true);
       await Promise.all([
         fetchCombos(),
-        fetchProducts()
+        fetchProducts(),
+        fetchCategories(),
+        fetchUnmappedCombos()
       ]);
     } catch (error) {
       showError('Failed to fetch data');
@@ -238,6 +268,32 @@ const Combos = () => {
       setProducts(response.data || []);
     } catch (error) {
       console.error('Failed to fetch products:', error);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await categoriesAPI.getAll();
+      setCategories(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch categories:', error);
+    }
+  };
+
+  const fetchUnmappedCombos = async () => {
+    try {
+      setUnmappedLoading(true);
+      const response = await combosAPI.getUnmapped();
+      setUnmappedCombos(response.data?.unmappedCombos || []);
+      setMappingStats({
+        totalCombos: response.data?.totalCombos || 0,
+        mappedCombos: response.data?.mappedCount || 0,
+        unmappedCombos: response.data?.unmappedCount || 0
+      });
+    } catch (error) {
+      console.error('Failed to fetch unmapped combos:', error);
+    } finally {
+      setUnmappedLoading(false);
     }
   };
 
@@ -272,6 +328,7 @@ const Combos = () => {
       name: '',
       description: '',
       barcode: '',
+      category: '',
       products: [],
       image: null
     });
@@ -395,6 +452,10 @@ const Combos = () => {
       formDataToSend.append('barcode', formData.barcode);
       formDataToSend.append('price', calculatedPrice.toString());
       
+      if (formData.category) {
+        formDataToSend.append('category', formData.category);
+      }
+      
       // Add products data
       formDataToSend.append('products', JSON.stringify(
         formData.products.map(p => ({
@@ -438,6 +499,7 @@ const Combos = () => {
       name: combo.name,
       description: combo.description || '',
       barcode: combo.barcode,
+      category: combo.category?._id || combo.category || '',
       products: combo.products || [],
       image: null
     });
@@ -470,6 +532,209 @@ const Combos = () => {
     }, 0);
   };
 
+  // Excel Upload Handlers
+  const handleShowUploadModal = () => {
+    setShowUploadModal(true);
+    setUploadFile(null);
+    setUploadResult(null);
+  };
+
+  const handleCloseUploadModal = () => {
+    setShowUploadModal(false);
+    setUploadFile(null);
+    setUploadResult(null);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const fileExtension = file.name.split('.').pop().toLowerCase();
+      if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+        setUploadFile(file);
+      } else {
+        showError('Please select a valid Excel file (.xlsx or .xls)');
+        e.target.value = null;
+      }
+    }
+  };
+
+  const handleUploadExcel = async () => {
+    if (!uploadFile) {
+      showError('Please select a file to upload');
+      return;
+    }
+
+    try {
+      setUploadLoading(true);
+      const response = await productMastersAPI.uploadExcel(uploadFile);
+      setUploadResult(response.data);
+      showSuccess(
+        `✅ Processed ${response.data.successCount} records! ` +
+        `Categories: ${response.data.categoriesCreated}, ` +
+        `New Combos: ${response.data.combosCreated}, ` +
+        `Updated: ${response.data.combosUpdated}`
+      );
+      
+      // Refresh data after upload
+      await fetchCombos();
+      await fetchUnmappedCombos();
+    } catch (error) {
+      console.error('Upload error:', error);
+      showError(error.response?.data?.message || 'Failed to upload Excel file');
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  // Product Mapping Handlers
+  const handleShowMappingModal = (combo) => {
+    setSelectedComboForMapping(combo);
+    setMappingProducts(combo.products || []);
+    setShowMappingModal(true);
+  };
+
+  const handleCloseMappingModal = () => {
+    setShowMappingModal(false);
+    setSelectedComboForMapping(null);
+    setMappingProducts([]);
+    setSelectedProduct('');
+    setProductQuantity(1);
+  };
+
+  const handleAddProductToMapping = () => {
+    if (!selectedProduct || productQuantity < 1) {
+      showError('Please select a product and enter a valid quantity');
+      return;
+    }
+
+    const product = products.find(p => p._id === selectedProduct);
+    if (!product) {
+      showError('Selected product not found');
+      return;
+    }
+
+    // Check if product is already added
+    const existingIndex = mappingProducts.findIndex(p => p.product._id === selectedProduct);
+
+    if (existingIndex !== -1) {
+      // Update quantity
+      const updated = [...mappingProducts];
+      updated[existingIndex] = {
+        ...updated[existingIndex],
+        quantity: updated[existingIndex].quantity + productQuantity
+      };
+      setMappingProducts(updated);
+    } else {
+      // Add new product
+      setMappingProducts([...mappingProducts, {
+        product: product,
+        quantity: productQuantity
+      }]);
+    }
+
+    setSelectedProduct('');
+    setProductQuantity(1);
+    showSuccess(`${product.name} added`);
+  };
+
+  const handleRemoveProductFromMapping = (index) => {
+    setMappingProducts(mappingProducts.filter((_, i) => i !== index));
+    showSuccess('Product removed');
+  };
+
+  const handleUpdateMappingQuantity = (index, newQuantity) => {
+    if (newQuantity < 1) return;
+    const updated = [...mappingProducts];
+    updated[index] = { ...updated[index], quantity: newQuantity };
+    setMappingProducts(updated);
+  };
+
+  const handleSaveProductMapping = async () => {
+    if (mappingProducts.length === 0) {
+      showError('Please add at least one product');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const productsToMap = mappingProducts.map(p => ({
+        product: p.product._id,
+        quantity: p.quantity
+      }));
+
+      await productMastersAPI.mapProductsToCombo(
+        selectedComboForMapping._id,
+        productsToMap
+      );
+
+      showSuccess('Products mapped to combo successfully!');
+      handleCloseMappingModal();
+      
+      // Refresh data
+      await fetchCombos();
+      await fetchUnmappedCombos();
+    } catch (error) {
+      console.error('Mapping error:', error);
+      showError(error.response?.data?.message || 'Failed to map products');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Checkbox handlers for barcode download
+  const handleSelectCombo = (comboId) => {
+    setSelectedCombos(prev => 
+      prev.includes(comboId) 
+        ? prev.filter(id => id !== comboId)
+        : [...prev, comboId]
+    );
+  };
+
+  const handleSelectAllCombos = (checked) => {
+    if (checked) {
+      setSelectedCombos(combos.map(combo => combo._id));
+    } else {
+      setSelectedCombos([]);
+    }
+  };
+
+  const handleDownloadBarcodes = async () => {
+    if (selectedCombos.length === 0) {
+      showError('Please select at least one combo');
+      return;
+    }
+
+    try {
+      setIsDownloadingBarcodes(true);
+      const response = await barcodesAPI.downloadComboBarcodes(selectedCombos);
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      if (selectedCombos.length === 1) {
+        const combo = combos.find(c => c._id === selectedCombos[0]);
+        link.setAttribute('download', `barcode-${combo?.barcode || 'combo'}.png`);
+      } else {
+        link.setAttribute('download', `combo-barcodes-${Date.now()}.zip`);
+      }
+      
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      showSuccess(`Downloaded ${selectedCombos.length} barcode(s) successfully!`);
+      setSelectedCombos([]);
+    } catch (error) {
+      console.error('Download error:', error);
+      showError('Failed to download barcodes');
+    } finally {
+      setIsDownloadingBarcodes(false);
+    }
+  };
+
   return (
     <StyledContainer>
       <AnimatedContainer>
@@ -482,7 +747,27 @@ const Combos = () => {
               </h2>
               <p className="text-muted mb-0 mt-2">Manage product combinations and bundles</p>
             </Col>
-            <Col xs="auto">
+            <Col xs="auto" className="d-flex gap-2">
+              {selectedCombos.length > 0 && (
+                <SecondaryButton 
+                  onClick={handleDownloadBarcodes}
+                  disabled={isDownloadingBarcodes}
+                >
+                  {isDownloadingBarcodes ? (
+                    <>
+                      <LoadingSpinner size="sm" className="me-2" />
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      📥 Download Barcodes ({selectedCombos.length})
+                    </>
+                  )}
+                </SecondaryButton>
+              )}
+              <SecondaryButton onClick={handleShowUploadModal}>
+                📤 Upload Excel
+              </SecondaryButton>
               <PrimaryButton onClick={handleShowModal}>
                 ✨ Add New Combo
               </PrimaryButton>
@@ -510,104 +795,244 @@ const Combos = () => {
           ))}
         </ToastContainer>
 
-        {loading && combos.length === 0 ? (
-          <div className="d-flex justify-content-center align-items-center" style={{minHeight: '200px'}}>
-            <LoadingSpinner animation="border" size="lg" />
-          </div>
-        ) : (
-          <StyledTable responsive hover>
-            <thead>
-              <tr>
-                <th>Image</th>
-                <th>Name</th>
-                <th>Barcode</th>
-                <th>Products</th>
-                <th>Price</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {combos.map((combo) => (
-                <tr key={combo._id}>
-                  <td>
-                    {combo.imageUrl ? (
-                      <img
-                        src={combo.imageUrl}
-                        alt={combo.name}
-                        style={{
-                          width: '50px',
-                          height: '50px',
-                          objectFit: 'cover',
-                          borderRadius: '8px'
-                        }}
+        <Tabs defaultActiveKey="all" className="mb-4">
+          <Tab eventKey="all" title={`📦 All Combos (${combos.length})`}>
+            {loading && combos.length === 0 ? (
+              <div className="d-flex justify-content-center align-items-center" style={{minHeight: '200px'}}>
+                <LoadingSpinner animation="border" size="lg" />
+              </div>
+            ) : (
+              <StyledTable responsive hover>
+                <thead>
+                  <tr>
+                    <th>
+                      <Form.Check
+                        type="checkbox"
+                        checked={selectedCombos.length === combos.length && combos.length > 0}
+                        onChange={(e) => handleSelectAllCombos(e.target.checked)}
                       />
-                    ) : (
-                      <div
-                        style={{
-                          width: '50px',
-                          height: '50px',
-                          backgroundColor: '#f8f9fa',
-                          borderRadius: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        📦
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    <div>
-                      <strong>{combo.name}</strong>
-                      {combo.description && (
+                    </th>
+                    <th>Image</th>
+                    <th>Name</th>
+                    <th>Barcode</th>
+                    <th>Category</th>
+                    <th>Products</th>
+                    <th>Status</th>
+                    <th>Price</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {combos.map((combo) => (
+                    <tr key={combo._id}>
+                      <td>
+                        <Form.Check
+                          type="checkbox"
+                          checked={selectedCombos.includes(combo._id)}
+                          onChange={() => handleSelectCombo(combo._id)}
+                        />
+                      </td>
+                      <td>
+                        {combo.imageUrl ? (
+                          <img
+                            src={combo.imageUrl}
+                            alt={combo.name}
+                            style={{
+                              width: '50px',
+                              height: '50px',
+                              objectFit: 'cover',
+                              borderRadius: '8px'
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: '50px',
+                              height: '50px',
+                              backgroundColor: '#f8f9fa',
+                              borderRadius: '8px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            📦
+                          </div>
+                        )}
+                      </td>
+                      <td>
                         <div>
-                          <small className="text-muted">{combo.description}</small>
+                          <strong>{combo.name}</strong>
+                          {combo.description && (
+                            <div>
+                              <small className="text-muted">{combo.description}</small>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <Badge bg="info" className="px-3 py-2">
-                      {combo.barcode}
+                      </td>
+                      <td>
+                        <Badge bg="info" className="px-3 py-2">
+                          {combo.barcode}
+                        </Badge>
+                      </td>
+                      <td>
+                        {combo.category ? (
+                          <Badge bg="secondary" className="px-2 py-1">
+                            {combo.category.name || combo.category}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </td>
+                      <td>
+                        <Badge bg="secondary">
+                          {combo.products?.length || 0} items
+                        </Badge>
+                      </td>
+                      <td>
+                        {combo.isMapped ? (
+                          <Badge bg="success" className="px-2 py-1">
+                            ✅ Mapped
+                          </Badge>
+                        ) : (
+                          <Badge bg="warning" className="px-2 py-1">
+                            ⏳ Unmapped
+                          </Badge>
+                        )}
+                      </td>
+                      <td>
+                        <strong className="text-success">₹{combo.price?.toFixed(2) || '0.00'}</strong>
+                      </td>
+                      <td>
+                        <div className="d-flex gap-2">
+                          <SecondaryButton
+                            size="sm"
+                            onClick={() => handleView(combo)}
+                          >
+                            👁️ View
+                          </SecondaryButton>
+                          <SecondaryButton
+                            size="sm"
+                            onClick={() => handleEdit(combo)}
+                          >
+                            ✏️ Edit
+                          </SecondaryButton>
+                          <DangerButton
+                            size="sm"
+                            variant="outline-danger"
+                            onClick={() => handleDelete(combo._id)}
+                          >
+                            🗑️ Delete
+                          </DangerButton>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </StyledTable>
+            )}
+          </Tab>
+
+          <Tab eventKey="unmapped" title={
+            <span>
+              🔗 Unmapped Combos 
+              {unmappedCombos.length > 0 && (
+                <Badge bg="warning" className="ms-2">{unmappedCombos.length}</Badge>
+              )}
+            </span>
+          }>
+            {unmappedLoading ? (
+              <div className="d-flex justify-content-center align-items-center" style={{minHeight: '200px'}}>
+                <LoadingSpinner animation="border" size="lg" />
+              </div>
+            ) : unmappedCombos.length === 0 ? (
+              <Alert variant="success">
+                <Alert.Heading>✅ All Combos Have Product Mappings!</Alert.Heading>
+                <p>
+                  All combos have been manually mapped to products. 
+                  <br />
+                  <strong>Stats:</strong> {mappingStats.totalCombos} total combos, {mappingStats.mappedCombos} mapped.
+                </p>
+              </Alert>
+            ) : (
+              <>
+                <Alert variant="info" className="mb-3">
+                  <Alert.Heading>🔗 Product Mapping Required</Alert.Heading>
+                  <p className="mb-2">
+                    These combos were imported from Excel but <strong>products are not mapped yet</strong>.
+                    Click "Map Products" to manually assign products to each combo.
+                  </p>
+                  <div className="d-flex gap-3 mt-2">
+                    <Badge bg="primary" className="px-3 py-2">
+                      Total: {mappingStats.totalCombos}
                     </Badge>
-                  </td>
-                  <td>
-                    <Badge bg="secondary">
-                      {combo.products?.length || 0} items
+                    <Badge bg="success" className="px-3 py-2">
+                      ✅ Mapped: {mappingStats.mappedCombos}
                     </Badge>
-                  </td>
-                  <td>
-                    <strong className="text-success">₹{combo.price?.toFixed(2) || '0.00'}</strong>
-                  </td>
-                  <td>
-                    <div className="d-flex gap-2">
-                      <SecondaryButton
-                        size="sm"
-                        onClick={() => handleView(combo)}
-                      >
-                        👁️ View
-                      </SecondaryButton>
-                      <SecondaryButton
-                        size="sm"
-                        onClick={() => handleEdit(combo)}
-                      >
-                        ✏️ Edit
-                      </SecondaryButton>
-                      <DangerButton
-                        size="sm"
-                        variant="outline-danger"
-                        onClick={() => handleDelete(combo._id)}
-                      >
-                        🗑️ Delete
-                      </DangerButton>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </StyledTable>
-        )}
+                    <Badge bg="warning" className="px-3 py-2">
+                      ⏳ Unmapped: {mappingStats.unmappedCombos}
+                    </Badge>
+                  </div>
+                </Alert>
+                <StyledTable responsive hover>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Combo Name</th>
+                      <th>Barcode/Code</th>
+                      <th>Category</th>
+                      <th>Price</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unmappedCombos.map((combo, index) => (
+                      <tr key={combo._id}>
+                        <td>{index + 1}</td>
+                        <td>
+                          <strong>{combo.name}</strong>
+                        </td>
+                        <td>
+                          <Badge bg="info" className="px-3 py-2">
+                            {combo.barcode}
+                          </Badge>
+                        </td>
+                        <td>
+                          {combo.category ? (
+                            <Badge bg="secondary" className="px-2 py-1">
+                              {combo.category.name}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted">-</span>
+                          )}
+                        </td>
+                        <td>
+                          <strong className="text-success">₹{combo.price?.toFixed(2)}</strong>
+                        </td>
+                        <td>
+                          <div className="d-flex gap-2">
+                            <PrimaryButton
+                              size="sm"
+                              onClick={() => handleShowMappingModal(combo)}
+                            >
+                              🔗 Map Products
+                            </PrimaryButton>
+                            <SecondaryButton
+                              size="sm"
+                              onClick={() => handleView(combo)}
+                            >
+                              👁️ View
+                            </SecondaryButton>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </StyledTable>
+              </>
+            )}
+          </Tab>
+        </Tabs>
 
         {/* Add/Edit Combo Modal */}
         <StyledModal show={showModal} onHide={handleCloseModal} size="lg" centered>
@@ -644,6 +1069,21 @@ const Combos = () => {
                   </FormGroup>
                 </Col>
               </Row>
+
+              <FormGroup>
+                <Form.Label>Category</Form.Label>
+                <Form.Select
+                  value={formData.category}
+                  onChange={(e) => handleInputChange('category', e.target.value)}
+                >
+                  <option value="">Select a category...</option>
+                  {categories.map(category => (
+                    <option key={category._id} value={category._id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </Form.Select>
+              </FormGroup>
 
               <FormGroup>
                 <Form.Label>Description</Form.Label>
@@ -910,6 +1350,297 @@ const Combos = () => {
             <SecondaryButton onClick={() => setShowViewModal(false)}>
               Close
             </SecondaryButton>
+          </Modal.Footer>
+        </StyledModal>
+
+        {/* Excel Upload Modal */}
+        <StyledModal show={showUploadModal} onHide={handleCloseUploadModal} size="lg" centered>
+          <Modal.Header closeButton>
+            <Modal.Title>📤 Upload Product Master Excel File</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Alert variant="info">
+              <strong>📋 Excel File Processing:</strong>
+              <ul className="mb-0 mt-2">
+                <li><strong>Product Category</strong> → Stored in <Badge bg="secondary">Category DB</Badge></li>
+                <li><strong>Selling Product Code, Product Name, Price</strong> → Stored in <Badge bg="primary">Combo DB</Badge></li>
+                <li>✅ Category & Combo are <strong>automatically mapped</strong></li>
+                <li>⏳ Products remain <strong>unmapped</strong> (manual mapping required)</li>
+              </ul>
+              <hr />
+              <strong>Required Columns:</strong> <code>S.No.</code>, <code>Product Category</code>, 
+              <code>Selling Product Code</code>, <code>Product Name</code>, <code>Price/product</code>
+            </Alert>
+
+            <FormGroup>
+              <Form.Label>Select Excel File (.xlsx or .xls)</Form.Label>
+              <Form.Control
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileChange}
+                disabled={uploadLoading}
+              />
+              {uploadFile && (
+                <Form.Text className="text-success">
+                  ✅ Selected: {uploadFile.name}
+                </Form.Text>
+              )}
+            </FormGroup>
+
+            {uploadResult && (
+              <div className="mt-3">
+                <Alert variant={uploadResult.errorCount > 0 ? 'warning' : 'success'}>
+                  <h6>📊 Upload Results</h6>
+                  <Row>
+                    <Col md={6}>
+                      <ul className="mb-0">
+                        <li><strong>Total Rows:</strong> {uploadResult.totalRows}</li>
+                        <li><strong>Success:</strong> {uploadResult.successCount}</li>
+                        <li><strong>Errors:</strong> {uploadResult.errorCount}</li>
+                      </ul>
+                    </Col>
+                    <Col md={6}>
+                      <ul className="mb-0">
+                        <li><strong>Categories Created:</strong> {uploadResult.categoriesCreated}</li>
+                        <li><strong>Combos Created:</strong> {uploadResult.combosCreated}</li>
+                        <li><strong>Combos Updated:</strong> {uploadResult.combosUpdated}</li>
+                      </ul>
+                    </Col>
+                  </Row>
+                </Alert>
+
+                {uploadResult.errors && uploadResult.errors.length > 0 && (
+                  <Card className="mt-3">
+                    <Card.Header className="bg-danger text-white">
+                      ❌ Errors ({uploadResult.errors.length})
+                    </Card.Header>
+                    <Card.Body style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                      {uploadResult.errors.map((err, idx) => (
+                        <div key={idx} className="mb-2">
+                          <strong>Row {err.row}:</strong> {err.error}
+                        </div>
+                      ))}
+                    </Card.Body>
+                  </Card>
+                )}
+
+                {uploadResult.processedData && uploadResult.processedData.length > 0 && (
+                  <Card className="mt-3">
+                    <Card.Header className="bg-success text-white">
+                      ✅ Successfully Processed ({uploadResult.processedData.length})
+                    </Card.Header>
+                    <Card.Body style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                      <Table size="sm" striped>
+                        <thead>
+                          <tr>
+                            <th>Category</th>
+                            <th>Combo Code</th>
+                            <th>Combo Name</th>
+                            <th>Price</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {uploadResult.processedData.slice(0, 10).map((item, idx) => (
+                            <tr key={idx}>
+                              <td>{item.category}</td>
+                              <td><Badge bg="info">{item.comboCode}</Badge></td>
+                              <td>{item.comboName}</td>
+                              <td>₹{item.price?.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                      {uploadResult.processedData.length > 10 && (
+                        <small className="text-muted">
+                          ... and {uploadResult.processedData.length - 10} more
+                        </small>
+                      )}
+                    </Card.Body>
+                  </Card>
+                )}
+              </div>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <SecondaryButton onClick={handleCloseUploadModal} disabled={uploadLoading}>
+              Close
+            </SecondaryButton>
+            <PrimaryButton onClick={handleUploadExcel} disabled={!uploadFile || uploadLoading}>
+              {uploadLoading ? (
+                <>
+                  <LoadingSpinner size="sm" className="me-2" />
+                  Uploading...
+                </>
+              ) : (
+                '📤 Upload & Process'
+              )}
+            </PrimaryButton>
+          </Modal.Footer>
+        </StyledModal>
+
+        {/* Product Mapping Modal */}
+        <StyledModal show={showMappingModal} onHide={handleCloseMappingModal} size="lg" centered>
+          <Modal.Header closeButton>
+            <Modal.Title>
+              🔗 Map Products to Combo
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {selectedComboForMapping && (
+              <>
+                <Card className="mb-3">
+                  <Card.Body>
+                    <Row>
+                      <Col md={8}>
+                        <h5>{selectedComboForMapping.name}</h5>
+                        <div>
+                          <Badge bg="info" className="me-2">{selectedComboForMapping.barcode}</Badge>
+                          {selectedComboForMapping.category && (
+                            <Badge bg="secondary">{selectedComboForMapping.category.name}</Badge>
+                          )}
+                        </div>
+                      </Col>
+                      <Col md={4} className="text-end">
+                        <h6>Price</h6>
+                        <h4 className="text-success">₹{selectedComboForMapping.price?.toFixed(2)}</h4>
+                      </Col>
+                    </Row>
+                  </Card.Body>
+                </Card>
+
+                <Alert variant="info" className="mb-3">
+                  <strong>💡 How to Map:</strong> Select products from your inventory and assign quantities to create this combo package.
+                </Alert>
+
+                {/* Add Product Section */}
+                <ProductCard>
+                  <Card.Body>
+                    <h6 className="mb-3">➕ Add Product to Combo</h6>
+                    <Row>
+                      <Col md={6}>
+                        <FormGroup>
+                          <Form.Label>Select Product</Form.Label>
+                          <Form.Select
+                            value={selectedProduct}
+                            onChange={(e) => setSelectedProduct(e.target.value)}
+                          >
+                            <option value="">Choose a product...</option>
+                            {products.map(product => (
+                              <option key={product._id} value={product._id}>
+                                {product.name} - ₹{product.price} (Stock: {product.quantity})
+                              </option>
+                            ))}
+                          </Form.Select>
+                        </FormGroup>
+                      </Col>
+                      <Col md={4}>
+                        <FormGroup>
+                          <Form.Label>Quantity</Form.Label>
+                          <Form.Control
+                            type="number"
+                            min="1"
+                            value={productQuantity}
+                            onChange={(e) => setProductQuantity(parseInt(e.target.value) || 1)}
+                          />
+                        </FormGroup>
+                      </Col>
+                      <Col md={2} className="d-flex align-items-end">
+                        <Button
+                          variant="primary"
+                          onClick={handleAddProductToMapping}
+                          style={{ borderRadius: '10px', width: '100%' }}
+                        >
+                          ➕
+                        </Button>
+                      </Col>
+                    </Row>
+                  </Card.Body>
+                </ProductCard>
+
+                {/* Mapped Products List */}
+                {mappingProducts.length > 0 && (
+                  <div className="mt-3">
+                    <h6 className="mb-3">📦 Products in this Combo ({mappingProducts.length})</h6>
+                    <Table bordered responsive>
+                      <thead className="bg-light">
+                        <tr>
+                          <th>Product</th>
+                          <th>Unit Price</th>
+                          <th>Quantity</th>
+                          <th>Total</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mappingProducts.map((item, index) => (
+                          <tr key={index}>
+                            <td>
+                              <div>
+                                <strong>{item.product.name}</strong>
+                                <div>
+                                  <small className="text-muted">
+                                    Barcode: {item.product.barcode}
+                                  </small>
+                                </div>
+                              </div>
+                            </td>
+                            <td>₹{item.product.price?.toFixed(2)}</td>
+                            <td>
+                              <div className="d-flex align-items-center">
+                                <Button
+                                  variant="outline-secondary"
+                                  size="sm"
+                                  onClick={() => handleUpdateMappingQuantity(index, item.quantity - 1)}
+                                  disabled={item.quantity <= 1}
+                                >
+                                  -
+                                </Button>
+                                <span className="mx-2 fw-bold">{item.quantity}</span>
+                                <Button
+                                  variant="outline-secondary"
+                                  size="sm"
+                                  onClick={() => handleUpdateMappingQuantity(index, item.quantity + 1)}
+                                >
+                                  +
+                                </Button>
+                              </div>
+                            </td>
+                            <td>₹{(item.product.price * item.quantity).toFixed(2)}</td>
+                            <td>
+                              <Button
+                                variant="outline-danger"
+                                size="sm"
+                                onClick={() => handleRemoveProductFromMapping(index)}
+                              >
+                                🗑️
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                )}
+
+                {mappingProducts.length === 0 && (
+                  <Alert variant="warning" className="mt-3">
+                    <strong>⚠️ No products added yet.</strong> Please add at least one product to map.
+                  </Alert>
+                )}
+              </>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <SecondaryButton onClick={handleCloseMappingModal}>
+              Cancel
+            </SecondaryButton>
+            <PrimaryButton 
+              onClick={handleSaveProductMapping} 
+              disabled={mappingProducts.length === 0 || loading}
+            >
+              {loading ? <LoadingSpinner size="sm" className="me-2" /> : null}
+              💾 Save Mapping
+            </PrimaryButton>
           </Modal.Footer>
         </StyledModal>
       </AnimatedContainer>

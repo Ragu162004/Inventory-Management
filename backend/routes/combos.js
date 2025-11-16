@@ -5,6 +5,9 @@ const comboController = require('../controllers/comboController');
 // GET /api/combos - Get all combos
 router.get('/', comboController.getAllCombos);
 
+// GET /api/combos/unmapped - Get unmapped combos (must be before /:id route)
+router.get('/unmapped', comboController.getUnmappedCombos);
+
 // GET /api/combos/barcode/:barcode - Get combo by barcode
 router.get('/barcode/:barcode', comboController.getComboByBarcode);
 

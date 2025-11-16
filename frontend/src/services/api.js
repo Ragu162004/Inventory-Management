@@ -100,6 +100,16 @@ export const salesAPI = {
 export const barcodesAPI = {
   getByBarcode: (barcode) => api.get(`/barcodes/${barcode}`),
   generate: (productItemId) => api.get(`/barcodes/product-item/${productItemId}`),
+  downloadProductBarcodes: (productIds) => {
+    return api.post('/barcode/products/bulk-download', { productIds }, {
+      responseType: 'blob'
+    });
+  },
+  downloadComboBarcodes: (comboIds) => {
+    return api.post('/barcode/combos/bulk-download', { comboIds }, {
+      responseType: 'blob'
+    });
+  },
 };
 
 // Returns API
@@ -127,6 +137,7 @@ export const combosAPI = {
   getAll: () => api.get('/combos'),
   getById: (id) => api.get(`/combos/${id}`),
   getByBarcode: (barcode) => api.get(`/combos/barcode/${barcode}`),
+  getUnmapped: () => api.get('/combos/unmapped'),
   create: (formData) => {
     return api.post('/combos', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -138,6 +149,103 @@ export const combosAPI = {
     });
   },
   delete: (id) => api.delete(`/combos/${id}`),
+};
+
+// Product Masters API (Excel Upload & Combo Mapping)
+export const productMastersAPI = {
+  uploadExcel: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/product-masters/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  getUnmappedCombos: () => api.get('/product-masters/unmapped'),
+  getStats: () => api.get('/product-masters/stats'),
+  getComboByCode: (code) => api.get(`/product-masters/code/${code}`),
+  mapProductsToCombo: (comboId, products) => {
+    return api.post('/product-masters/map-products', {
+      comboId,
+      products
+    });
+  },
+};
+
+// Reports API
+export const reportsAPI = {
+  getPurchaseSalesData: (startDate, endDate) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    return api.get(`/reports/purchase-sales?${params.toString()}`);
+  },
+  getProductMonthlyData: (productId, startDate, endDate) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    return api.get(`/reports/product/${productId}/monthly?${params.toString()}`);
+  },
+  getProductsList: () => api.get('/reports/products/list'),
+};
+
+// Profit & Loss API
+export const profitLossAPI = {
+  getProfitLoss: (startDate, endDate) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    return api.get(`/profit-loss?${params.toString()}`);
+  },
+  uploadExcel: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/profit-loss/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  exportExcel: (data) => {
+    // This is handled client-side
+    return data;
+  },
+};
+
+// RTO/RPU Products API
+export const rtoProductsAPI = {
+  getAll: (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.category) params.append('category', filters.category);
+    if (filters.status) params.append('status', filters.status);
+    if (filters.search) params.append('search', filters.search);
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+    return api.get(`/rto-products?${params.toString()}`);
+  },
+  getById: (id) => api.get(`/rto-products/${id}`),
+  create: (data) => api.post('/rto-products', data),
+  update: (id, data) => api.put(`/rto-products/${id}`, data),
+  delete: (id) => api.delete(`/rto-products/${id}`),
+  getSummary: () => api.get('/rto-products/stats/summary'),
+};
+
+// Uploaded Profit Sheets API
+export const uploadedProfitSheetsAPI = {
+  getAll: (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.status) params.append('status', filters.status);
+    if (filters.search) params.append('search', filters.search);
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+    return api.get(`/uploaded-profit-sheets?${params.toString()}`);
+  },
+  getById: (id) => api.get(`/uploaded-profit-sheets/${id}`),
+  create: (data) => api.post('/uploaded-profit-sheets', data),
+  update: (id, data) => api.put(`/uploaded-profit-sheets/${id}`, data),
+  delete: (id) => api.delete(`/uploaded-profit-sheets/${id}`),
+  getSummary: () => api.get('/uploaded-profit-sheets/stats/summary'),
 };
 
 export default api;

@@ -9,6 +9,7 @@ const storage = multer.memoryStorage();
 exports.getAllCombos = async (req, res) => {
   try {
     const combos = await Combo.find({ isActive: true })
+      .populate('category', 'name code')
       .populate('products.product', 'name price barcode')
       .sort({ createdAt: -1 });
     res.json(combos);
@@ -133,6 +134,28 @@ exports.deleteCombo = async (req, res) => {
       return res.status(404).json({ message: 'Combo not found' });
     }
     res.json({ message: 'Combo deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get unmapped combos (combos where products are not manually mapped)
+exports.getUnmappedCombos = async (req, res) => {
+  try {
+    const unmappedCombos = await Combo.find({ isActive: true, isMapped: false })
+      .populate('category', 'name code')
+      .select('barcode name category price products isMapped')
+      .sort({ createdAt: -1 });
+    
+    const totalCombos = await Combo.countDocuments({ isActive: true });
+    const mappedCount = await Combo.countDocuments({ isActive: true, isMapped: true });
+    
+    res.json({
+      unmappedCombos,
+      totalCombos,
+      unmappedCount: unmappedCombos.length,
+      mappedCount
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

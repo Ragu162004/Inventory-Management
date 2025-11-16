@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled, { keyframes, css } from 'styled-components';
-import { productsAPI, vendorsAPI, returnsAPI, categoriesAPI } from '../services/api';
+import { productsAPI, vendorsAPI, returnsAPI, categoriesAPI, barcodesAPI } from '../services/api';
 import Quagga from 'quagga';
 
 // Animations
@@ -1130,24 +1130,34 @@ const Products = () => {
     }
 
     try {
-      // Filter products that have barcodes
-      const productsWithBarcodes = products.filter(
-        product => selectedProducts.includes(product._id) && product.barcode
-      );
+      setLoading(true);
+      const response = await barcodesAPI.downloadProductBarcodes(selectedProducts);
       
-      if (productsWithBarcodes.length === 0) {
-        setError('None of the selected products have barcodes');
-        return;
-      }
-
-      // Download barcodes one by one
-      for (const product of productsWithBarcodes) {
-        await downloadBarcode(product.barcode, product.name);
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      if (selectedProducts.length === 1) {
+        const product = products.find(p => p._id === selectedProducts[0]);
+        link.setAttribute('download', `barcode-${product?.barcode || 'product'}.png`);
+      } else {
+        link.setAttribute('download', `product-barcodes-${Date.now()}.zip`);
       }
       
-      setSuccess(`Downloaded ${productsWithBarcodes.length} barcodes successfully!`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      setSuccess(`Downloaded ${selectedProducts.length} barcode(s) successfully!`);
+      setSelectedProducts([]);
+      setSelectAll(false);
     } catch (error) {
+      console.error('Download error:', error);
       setError('Failed to download barcodes. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
   

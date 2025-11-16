@@ -1,8 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Alert, Form, Button, Row, Col, Card, Spinner } from 'react-bootstrap';
-import { purchasesAPI, salesAPI } from '../services/api';
+import { purchasesAPI, salesAPI, reportsAPI } from '../services/api';
 import styled, { keyframes, css } from 'styled-components';
 import { FaFilter, FaDownload, FaChartLine, FaShoppingCart, FaDollarSign } from 'react-icons/fa';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ComposedChart,
+} from 'recharts';
 
 // Animations
 const fadeIn = keyframes`
@@ -43,6 +56,21 @@ const HeaderSection = styled.div`
 `;
 
 const FilterCard = styled(Card)`
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+  margin-bottom: 2rem;
+  
+  .card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 15px 15px 0 0;
+    border: none;
+    font-weight: 600;
+  }
+`;
+
+const GraphCard = styled(Card)`
   border: none;
   border-radius: 15px;
   box-shadow: 0 5px 20px rgba(0,0,0,0.1);
@@ -132,7 +160,7 @@ const FormGroup = styled(Form.Group)`
     margin-bottom: 0.5rem;
   }
   
-  .form-control {
+  .form-control, .form-select {
     border-radius: 10px;
     border: 2px solid #e2e8f0;
     padding: 0.8rem;
@@ -229,12 +257,30 @@ const Reports = () => {
     startDate: '',
     endDate: ''
   });
+  const [chartData, setChartData] = useState([]);
+  const [productData, setProductData] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [reportSummary, setReportSummary] = useState(null);
+  const [productSummary, setProductSummary] = useState(null);
 
   useEffect(() => {
     fetchData();
+    fetchProducts();
   }, []);
+
+  useEffect(() => {
+    fetchChartData();
+  }, [filter]);
+
+  useEffect(() => {
+    if (selectedProduct) {
+      fetchProductMonthlyData();
+    }
+  }, [selectedProduct, filter]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -252,9 +298,52 @@ const Reports = () => {
     }
   };
 
+  const fetchProducts = async () => {
+    try {
+      const res = await reportsAPI.getProductsList();
+      setProducts(res.data || []);
+      if (res.data && res.data.length > 0) {
+        setSelectedProduct(res.data[0]._id);
+      }
+    } catch (error) {
+      console.error('Failed to fetch products:', error);
+    }
+  };
+
+  const fetchChartData = async () => {
+    setGraphLoading(true);
+    try {
+      const response = await reportsAPI.getPurchaseSalesData(filter.startDate, filter.endDate);
+      setChartData(response.data.chartData || []);
+      setReportSummary(response.data.summary || null);
+    } catch (error) {
+      console.error('Failed to fetch chart data:', error);
+    } finally {
+      setGraphLoading(false);
+    }
+  };
+
+  const fetchProductMonthlyData = async () => {
+    try {
+      const response = await reportsAPI.getProductMonthlyData(
+        selectedProduct,
+        filter.startDate,
+        filter.endDate
+      );
+      setProductData(response.data.chartData || []);
+      setProductSummary(response.data.summary || null);
+    } catch (error) {
+      console.error('Failed to fetch product data:', error);
+    }
+  };
+
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilter(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleProductChange = (e) => {
+    setSelectedProduct(e.target.value);
   };
 
   const clearFilters = () => {
@@ -310,19 +399,21 @@ const Reports = () => {
     );
   }
 
+  const selectedProductName = products.find(p => p._id === selectedProduct)?.name || 'Product';
+
   return (
     <Container>
       <AnimatedContainer>
         <HeaderSection>
-                  <Row className="">
-                    <Col>
-                      <h4 className="mb-0 d-flex align-items-center">
-                        <IconWrapper style={{ fontSize: "1.3rem", marginRight: "0.6rem" }}>🛒</IconWrapper>
-                        Financial Reports
-                      </h4>
-                    </Col>
-                  </Row>
-                </HeaderSection>
+          <Row className="">
+            <Col>
+              <h4 className="mb-0 d-flex align-items-center">
+                <IconWrapper style={{ fontSize: "1.3rem", marginRight: "0.6rem" }}>📊</IconWrapper>
+                Financial Reports & Analytics
+              </h4>
+            </Col>
+          </Row>
+        </HeaderSection>
         
         {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
 
@@ -330,16 +421,16 @@ const Reports = () => {
         <StatsGrid>
           <StatCard>
             <Card.Title>📈 Total Sales</Card.Title>
-            <Card.Text>${calculateTotals(filteredSales).toFixed(2)}</Card.Text>
+            <Card.Text>${reportSummary?.totalSales.toFixed(2) || calculateTotals(filteredSales).toFixed(2)}</Card.Text>
           </StatCard>
           <StatCard>
             <Card.Title>🛒 Total Purchases</Card.Title>
-            <Card.Text>${calculateTotals(filteredPurchases).toFixed(2)}</Card.Text>
+            <Card.Text>${reportSummary?.totalPurchase.toFixed(2) || calculateTotals(filteredPurchases).toFixed(2)}</Card.Text>
           </StatCard>
           <StatCard>
             <Card.Title>💰 Net Profit</Card.Title>
-            <Card.Text style={{ color: calculateProfit() >= 0 ? '#48bb78' : '#e53e3e' }}>
-              ${calculateProfit().toFixed(2)}
+            <Card.Text style={{ color: (reportSummary?.profit || calculateProfit()) >= 0 ? '#48bb78' : '#e53e3e' }}>
+              ${(reportSummary?.profit || calculateProfit()).toFixed(2)}
             </Card.Text>
           </StatCard>
           <StatCard>
@@ -399,6 +490,127 @@ const Reports = () => {
           </Card.Body>
         </FilterCard>
 
+        {/* Purchase & Sales Trend Graph */}
+        <GraphCard>
+          <Card.Header>
+            <IconWrapper>📈</IconWrapper>
+            Purchase & Sales Trend (Daily Breakdown)
+          </Card.Header>
+          <Card.Body>
+            {graphLoading ? (
+              <div className="text-center py-5">
+                <LoadingSpinner animation="border" />
+              </div>
+            ) : chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={400}>
+                <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip 
+                    formatter={(value) => `$${value.toFixed(2)}`}
+                    contentStyle={{
+                      backgroundColor: '#f5f7fa',
+                      border: '2px solid #667eea',
+                      borderRadius: '10px'
+                    }}
+                  />
+                  <Legend />
+                  <Bar dataKey="purchaseAmount" fill="#764ba2" name="Purchase Amount" />
+                  <Bar dataKey="salesAmount" fill="#667eea" name="Sales Amount" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-5 text-muted">
+                <p>No data available for the selected date range</p>
+              </div>
+            )}
+          </Card.Body>
+        </GraphCard>
+
+        {/* Product-wise Analysis */}
+        <GraphCard>
+          <Card.Header>
+            <IconWrapper>🎯</IconWrapper>
+            Product-wise Analysis (Monthly Breakdown)
+          </Card.Header>
+          <Card.Body>
+            <FormGroup className="mb-4">
+              <Form.Label>Select Product</Form.Label>
+              <Form.Select 
+                value={selectedProduct} 
+                onChange={handleProductChange}
+                className="form-control"
+              >
+                {products.map(product => (
+                  <option key={product._id} value={product._id}>
+                    {product.name}
+                  </option>
+                ))}
+              </Form.Select>
+            </FormGroup>
+
+            {selectedProduct && (
+              <>
+                <div className="mb-4">
+                  <h6>Summary for {selectedProductName}</h6>
+                  <Row>
+                    <Col md={3}>
+                      <StatCard>
+                        <Card.Title>Quantity Purchased</Card.Title>
+                        <Card.Text>{productSummary?.totalPurchaseQuantity || 0}</Card.Text>
+                      </StatCard>
+                    </Col>
+                    <Col md={3}>
+                      <StatCard>
+                        <Card.Title>Quantity Sold</Card.Title>
+                        <Card.Text>{productSummary?.totalSalesQuantity || 0}</Card.Text>
+                      </StatCard>
+                    </Col>
+                    <Col md={3}>
+                      <StatCard>
+                        <Card.Title>Purchase Value</Card.Title>
+                        <Card.Text>${productSummary?.totalPurchaseAmount.toFixed(2) || 0}</Card.Text>
+                      </StatCard>
+                    </Col>
+                    <Col md={3}>
+                      <StatCard>
+                        <Card.Title>Sales Value</Card.Title>
+                        <Card.Text>${productSummary?.totalSalesAmount.toFixed(2) || 0}</Card.Text>
+                      </StatCard>
+                    </Col>
+                  </Row>
+                </div>
+
+                {productData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart data={productData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis yAxisId="left" label={{ value: 'Quantity', angle: -90, position: 'insideLeft' }} />
+                      <YAxis yAxisId="right" orientation="right" label={{ value: 'Amount', angle: 90, position: 'insideRight' }} />
+                      <Tooltip 
+                        contentStyle={{
+                          backgroundColor: '#f5f7fa',
+                          border: '2px solid #667eea',
+                          borderRadius: '10px'
+                        }}
+                      />
+                      <Legend />
+                      <Bar yAxisId="left" dataKey="purchaseQuantity" fill="#764ba2" name="Purchase Qty" />
+                      <Bar yAxisId="left" dataKey="salesQuantity" fill="#667eea" name="Sales Qty" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center py-5 text-muted">
+                    <p>No data available for this product</p>
+                  </div>
+                )}
+              </>
+            )}
+          </Card.Body>
+        </GraphCard>
+
         {/* Purchases Report */}
         <ReportSection>
           <div className="d-flex justify-content-between align-items-center mb-3">
@@ -424,10 +636,10 @@ const Reports = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredPurchases.map((purchase, index) => (
+              {filteredPurchases.slice(0, 10).map((purchase, index) => (
                 <TableRow key={purchase._id}>
                   <td><strong>{purchase.purchaseId}</strong></td>
-                  <td>{purchase.vendor?.name}</td>
+                  <td>{purchase.vendor?.name || 'N/A'}</td>
                   <td>{new Date(purchase.purchaseDate).toLocaleDateString()}</td>
                   <td>${purchase.totalAmount.toFixed(2)}</td>
                 </TableRow>
@@ -465,10 +677,10 @@ const Reports = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredSales.map((sale, index) => (
+              {filteredSales.slice(0, 10).map((sale, index) => (
                 <TableRow key={sale._id}>
                   <td><strong>{sale.saleId}</strong></td>
-                  <td>{sale.buyer?.name}</td>
+                  <td>{sale.buyer?.name || 'N/A'}</td>
                   <td>{new Date(sale.saleDate).toLocaleDateString()}</td>
                   <td>${sale.totalAmount.toFixed(2)}</td>
                 </TableRow>

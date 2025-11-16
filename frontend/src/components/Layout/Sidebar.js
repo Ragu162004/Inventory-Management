@@ -341,6 +341,14 @@ const Sidebar = () => {
       section: "Reports",
       items: [
         { path: "/reports", icon: "bi-graph-up", text: "Reports" },
+        { path: "/profit-loss", icon: "bi-graph-up-arrow", text: "Profit & Loss" },
+        { path: "/uploaded-data", icon: "bi-cloud-arrow-down", text: "Uploaded Data" },
+      ]
+    },
+    {
+      section: "Returns & Tracking",
+      items: [
+        { path: "/rto-products", icon: "bi-arrow-return-left", text: "RTO/RPU Products" },
       ]
     }
   ];
