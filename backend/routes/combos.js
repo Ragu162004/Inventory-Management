@@ -23,4 +23,7 @@ router.put('/:id', comboController.upload.single('image'), comboController.updat
 // DELETE /api/combos/:id - Delete combo (soft delete)
 router.delete('/:id', comboController.deleteCombo);
 
+// POST /api/combos/:id/add-product - Add product to combo
+router.post('/:id/add-product', comboController.addProductToCombo);
+
 module.exports = router;

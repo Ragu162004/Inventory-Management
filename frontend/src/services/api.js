@@ -148,6 +148,7 @@ export const combosAPI = {
     });
   },
   delete: (id) => api.delete(`/combos/${id}`),
+  addProduct: (id, data) => api.post(`/combos/${id}/add-product`, data),
 };
 
 // Product Masters API (Excel Upload)

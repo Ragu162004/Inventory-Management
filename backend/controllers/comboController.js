@@ -161,6 +161,51 @@ exports.getUnmappedCombos = async (req, res) => {
   }
 };
 
+// Add product to combo
+exports.addProductToCombo = async (req, res) => {
+  try {
+    const { product, quantity } = req.body;
+    const comboId = req.params.id;
+
+    if (!product || !quantity || quantity < 1) {
+      return res.status(400).json({ message: 'Product and valid quantity are required' });
+    }
+
+    // Check if product exists
+    const productExists = await Product.findById(product);
+    if (!productExists) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    const combo = await Combo.findById(comboId);
+    if (!combo) {
+      return res.status(404).json({ message: 'Combo not found' });
+    }
+
+    // Check if product already exists in combo
+    const existingProductIndex = combo.products.findIndex(
+      p => p.product.toString() === product
+    );
+
+    if (existingProductIndex !== -1) {
+      // Update quantity if product already exists
+      combo.products[existingProductIndex].quantity += parseInt(quantity);
+    } else {
+      // Add new product to combo
+      combo.products.push({ product, quantity: parseInt(quantity) });
+    }
+
+    await combo.save();
+    
+    const updatedCombo = await Combo.findById(comboId)
+      .populate('products.product', 'name price barcode');
+    
+    res.json(updatedCombo);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Multer upload middleware
 exports.upload = multer({
   storage,

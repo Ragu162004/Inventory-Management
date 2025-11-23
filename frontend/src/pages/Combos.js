@@ -216,6 +216,12 @@ const Combos = () => {
   const [editingCell, setEditingCell] = useState(null);
   const [editableData, setEditableData] = useState([]);
 
+  // Add Item modal
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [selectedComboForItem, setSelectedComboForItem] = useState(null);
+  const [itemProduct, setItemProduct] = useState('');
+  const [itemQuantity, setItemQuantity] = useState(1);
+
   // Form data
   const [formData, setFormData] = useState({
     name: '',
@@ -507,6 +513,43 @@ const Combos = () => {
     }
   };
 
+  const handleAddItem = (combo) => {
+    setSelectedComboForItem(combo);
+    setItemProduct('');
+    setItemQuantity(1);
+    setShowAddItemModal(true);
+  };
+
+  const handleCloseAddItemModal = () => {
+    setShowAddItemModal(false);
+    setSelectedComboForItem(null);
+    setItemProduct('');
+    setItemQuantity(1);
+  };
+
+  const handleSaveItem = async () => {
+    if (!itemProduct || itemQuantity < 1) {
+      showError('Please select a product and enter valid quantity');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await combosAPI.addProduct(selectedComboForItem._id, {
+        product: itemProduct,
+        quantity: itemQuantity
+      });
+      
+      showSuccess('Product added to combo successfully!');
+      handleCloseAddItemModal();
+      fetchCombos();
+    } catch (error) {
+      showError(error.response?.data?.message || 'Failed to add product to combo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const calculateComboValue = () => {
     return formData.products.reduce((total, item) => {
       return total + (item.product.price * item.quantity);
@@ -773,6 +816,7 @@ const Combos = () => {
                     <th>Name</th>
                     <th>Barcode</th>
                     <th>Category</th>
+                    <th>Products</th>
                     <th>Price</th>
                     <th>Actions</th>
                   </tr>
@@ -840,10 +884,21 @@ const Combos = () => {
                         )}
                       </td>
                       <td>
+                        <Badge bg="info">
+                          {combo.products?.length || 0} items
+                        </Badge>
+                      </td>
+                      <td>
                         <strong className="text-success">₹{combo.price?.toFixed(2) || '0.00'}</strong>
                       </td>
                       <td>
-                        <div className="d-flex gap-2">
+                        <div className="d-flex gap-1 flex-wrap">
+                          <SecondaryButton
+                            size="sm"
+                            onClick={() => handleAddItem(combo)}
+                          >
+                            ➕ Add Item
+                          </SecondaryButton>
                           <SecondaryButton
                             size="sm"
                             onClick={() => handleView(combo)}
@@ -1308,6 +1363,57 @@ const Combos = () => {
           </Modal.Footer>
         </StyledModal>
 
+
+        {/* Add Item Modal */}
+        <StyledModal show={showAddItemModal} onHide={handleCloseAddItemModal} centered>
+          <Modal.Header closeButton>
+            <Modal.Title>➕ Add Product to Combo</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {selectedComboForItem && (
+              <>
+                <div className="mb-3">
+                  <h6>Adding to: <strong>{selectedComboForItem.name}</strong></h6>
+                  <Badge bg="info">{selectedComboForItem.barcode}</Badge>
+                </div>
+                
+                <FormGroup>
+                  <Form.Label>Select Product</Form.Label>
+                  <Form.Select
+                    value={itemProduct}
+                    onChange={(e) => setItemProduct(e.target.value)}
+                  >
+                    <option value="">Choose a product...</option>
+                    {products.map(product => (
+                      <option key={product._id} value={product._id}>
+                        {product.name} - ₹{product.price} (Stock: {product.quantity})
+                      </option>
+                    ))}
+                  </Form.Select>
+                </FormGroup>
+                
+                <FormGroup>
+                  <Form.Label>Quantity</Form.Label>
+                  <Form.Control
+                    type="number"
+                    min="1"
+                    value={itemQuantity}
+                    onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
+                  />
+                </FormGroup>
+              </>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <SecondaryButton onClick={handleCloseAddItemModal}>
+              Cancel
+            </SecondaryButton>
+            <PrimaryButton onClick={handleSaveItem} disabled={loading}>
+              {loading ? <LoadingSpinner size="sm" className="me-2" /> : null}
+              Add Product
+            </PrimaryButton>
+          </Modal.Footer>
+        </StyledModal>
 
       </AnimatedContainer>
     </StyledContainer>
