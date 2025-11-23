@@ -257,7 +257,9 @@ const Combos = () => {
 
   const fetchCombos = async () => {
     try {
+      console.log('Fetching combos...');
       const response = await combosAPI.getAll();
+      console.log('Combos response:', response.data);
       setCombos(response.data || []);
     } catch (error) {
       console.error('Failed to fetch combos:', error);
@@ -542,8 +544,10 @@ const Combos = () => {
       
       showSuccess('Product added to combo successfully!');
       handleCloseAddItemModal();
-      fetchCombos();
+      // Force refresh the combos list
+      await fetchCombos();
     } catch (error) {
+      console.error('Add product error:', error);
       showError(error.response?.data?.message || 'Failed to add product to combo');
     } finally {
       setLoading(false);
@@ -645,7 +649,7 @@ const Combos = () => {
           <Form.Control
             size="sm"
             type={field === 'price' ? 'number' : 'text'}
-            value={value}
+            value={value || ''}
             onChange={(e) => handleCellEdit(field, e.target.value)}
             onBlur={handleCellBlur}
             onKeyPress={(e) => e.key === 'Enter' && handleCellBlur()}
@@ -655,13 +659,17 @@ const Combos = () => {
         );
       }
       
+      const displayValue = field === 'price' || field === 'priceWithGST' 
+        ? `₹${parseFloat(value || 0).toFixed(2)}` 
+        : String(value || '');
+      
       return (
         <span 
           onClick={() => handleCellClick(field)}
           style={{ cursor: 'pointer', padding: '4px', borderRadius: '4px' }}
           className="hover-edit"
         >
-          {field === 'price' || field === 'priceWithGST' ? `₹${parseFloat(value).toFixed(2)}` : value}
+          {displayValue}
         </span>
       );
     };
@@ -671,7 +679,9 @@ const Combos = () => {
         <td>{renderEditableCell('sNo', localData.sNo)}</td>
         <td>{renderEditableCell('category', localData.category)}</td>
         <td>
-          <Badge bg="info">{renderEditableCell('comboCode', localData.comboCode)}</Badge>
+          <Badge bg="info">
+            <span>{renderEditableCell('comboCode', localData.comboCode)}</span>
+          </Badge>
         </td>
         <td>{renderEditableCell('comboName', localData.comboName)}</td>
         <td>{renderEditableCell('price', localData.price)}</td>
@@ -817,6 +827,7 @@ const Combos = () => {
                     <th>Barcode</th>
                     <th>Category</th>
                     <th>Products</th>
+                    <th>Available</th>
                     <th>Price</th>
                     <th>Actions</th>
                   </tr>
@@ -877,7 +888,7 @@ const Combos = () => {
                       <td>
                         {combo.category ? (
                           <Badge bg="secondary" className="px-2 py-1">
-                            {combo.category.name || combo.category}
+                            {typeof combo.category === 'object' ? combo.category.name : combo.category}
                           </Badge>
                         ) : (
                           <span className="text-muted">-</span>
@@ -886,6 +897,11 @@ const Combos = () => {
                       <td>
                         <Badge bg="info">
                           {combo.products?.length || 0} items
+                        </Badge>
+                      </td>
+                      <td>
+                        <Badge bg={combo.availableCount > 0 ? 'success' : 'danger'}>
+                          {combo.availableCount || 0} available
                         </Badge>
                       </td>
                       <td>

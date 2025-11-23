@@ -238,6 +238,38 @@ exports.getLowStockProducts = async (req, res) => {
 };
 
 
+// Add product to RTO/RPU
+exports.addToRTO = async (req, res) => {
+  try {
+    const { productId, category, quantity, reason, notes } = req.body;
+    const RTOProduct = require('../models/RTOProduct');
+
+    // Get product details
+    const product = await Product.findById(productId);
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    // Create RTO product
+    const rtoProduct = new RTOProduct({
+      product: productId,
+      productName: product.name,
+      barcode: product.barcode,
+      category: category,
+      quantity: quantity,
+      price: product.price,
+      totalValue: product.price * quantity,
+      reason: reason,
+      notes: notes
+    });
+
+    await rtoProduct.save();
+    res.status(201).json(rtoProduct);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 //upload handle
 exports.upload = multer({
   storage,

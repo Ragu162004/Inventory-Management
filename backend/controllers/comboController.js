@@ -10,9 +10,30 @@ exports.getAllCombos = async (req, res) => {
   try {
     const combos = await Combo.find({ isActive: true })
       .populate('category', 'name code')
-      .populate('products.product', 'name price barcode')
+      .populate('products.product', 'name price barcode quantity')
       .sort({ createdAt: -1 });
-    res.json(combos);
+    
+    // Calculate available combo count based on product stock
+    const combosWithAvailability = combos.map(combo => {
+      let availableCount = 0;
+      
+      if (combo.products && combo.products.length > 0) {
+        // Calculate how many combos can be made with current stock
+        availableCount = Math.min(
+          ...combo.products.map(cp => {
+            if (!cp.product || !cp.product.quantity) return 0;
+            return Math.floor(cp.product.quantity / cp.quantity);
+          })
+        );
+      }
+      
+      return {
+        ...combo.toObject(),
+        availableCount: availableCount
+      };
+    });
+    
+    res.json(combosWithAvailability);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

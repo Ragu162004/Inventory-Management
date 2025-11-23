@@ -10,54 +10,135 @@ exports.updateSale = async (req, res) => {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
-    // Only update sale record, do not change product stock
-    const productMap = new Map();
-    for (const item of items) {
-      const key = item.product;
-      if (!productMap.has(key)) {
-        productMap.set(key, { ...item, quantity: item.quantity || 1 });
+    // First, restore quantities from the original sale
+    for (const oldItem of sale.items) {
+      if (oldItem.type === 'rto-product') {
+        const RTOProduct = require('../models/RTOProduct');
+        await RTOProduct.findByIdAndUpdate(oldItem.rtoProduct, { $inc: { quantity: oldItem.quantity } });
+        const rtoProduct = await RTOProduct.findById(oldItem.rtoProduct).populate('product');
+        if (rtoProduct && rtoProduct.product) {
+          await Product.findByIdAndUpdate(rtoProduct.product._id, { $inc: { quantity: oldItem.quantity } });
+        }
+      } else if (oldItem.type === 'combo') {
+        const combo = await Combo.findById(oldItem.combo).populate('products.product');
+        if (combo) {
+          for (const comboProduct of combo.products) {
+            const restoreQty = comboProduct.quantity * oldItem.quantity;
+            await Product.findByIdAndUpdate(comboProduct.product._id, { $inc: { quantity: restoreQty } });
+          }
+        }
       } else {
-        productMap.get(key).quantity += item.quantity || 1;
+        await Product.findByIdAndUpdate(oldItem.product, { $inc: { quantity: oldItem.quantity } });
+        
+        // Also restore RTO quantity if this product exists in RTO
+        const RTOProduct = require('../models/RTOProduct');
+        const rtoProduct = await RTOProduct.findOne({ product: oldItem.product });
+        if (rtoProduct) {
+          await RTOProduct.findByIdAndUpdate(rtoProduct._id, { $inc: { quantity: oldItem.quantity } });
+        }
       }
     }
-    const uniqueProductIds = Array.from(productMap.keys());
-    const products = await Product.find({ _id: { $in: uniqueProductIds } });
-    if (products.length !== uniqueProductIds.length) {
-      return res.status(400).json({ message: 'Some products are not available' });
-    }
-    let totalAmount = 0;
+
+    // Now process new items and deduct quantities
     const saleItems = [];
-    for (const productId of uniqueProductIds) {
-      const item = productMap.get(productId);
-      const product = products.find(p => p._id.toString() === productId);
-      if (!product) {
-        return res.status(400).json({ message: `Product with id ${productId} not found` });
-      }
-        // Calculate available stock after restoring previous sale quantities
-        const prevItem = sale.items.find(i => i.product.toString() === productId);
-        const prevQty = prevItem ? prevItem.quantity : 0;
-        const availableStock = product.quantity + prevQty;
-        if (item.quantity > availableStock) {
-          return res.status(400).json({ message: `Product ${product.name} does not have enough stock. Available: ${availableStock}` });
+    let totalAmount = 0;
+    
+    for (const item of items) {
+      if (item.type === 'rto-product') {
+        const RTOProduct = require('../models/RTOProduct');
+        const rtoProduct = await RTOProduct.findById(item.rtoProduct).populate('product');
+        if (!rtoProduct) {
+          return res.status(400).json({ message: `RTO Product with id ${item.rtoProduct} not found` });
         }
-        // If price is changed, update product price
-        let usedPrice = product.price;
-        if (item.unitPrice && item.unitPrice !== product.price) {
-          usedPrice = item.unitPrice;
-          await Product.findByIdAndUpdate(product._id, { price: usedPrice });
+        
+        if (rtoProduct.quantity < item.quantity) {
+          return res.status(400).json({ message: `RTO Product ${rtoProduct.productName} does not have enough stock` });
         }
-        const itemTotal = usedPrice * item.quantity;
+        
+        await RTOProduct.findByIdAndUpdate(rtoProduct._id, { $inc: { quantity: -item.quantity } });
+        if (rtoProduct.product) {
+          await Product.findByIdAndUpdate(rtoProduct.product._id, { $inc: { quantity: -item.quantity } });
+        }
+        
+        const itemTotal = rtoProduct.price * item.quantity;
         totalAmount += itemTotal;
         saleItems.push({
+          type: 'rto-product',
+          rtoProduct: rtoProduct._id,
+          productName: rtoProduct.productName,
+          quantity: item.quantity,
+          unitPrice: rtoProduct.price,
+          total: itemTotal,
+          barcode: rtoProduct.barcode
+        });
+      } else if (item.type === 'combo') {
+        const combo = await Combo.findById(item.combo).populate('products.product');
+        if (!combo) {
+          return res.status(400).json({ message: `Combo with id ${item.combo} not found` });
+        }
+        
+        for (const comboProduct of combo.products) {
+          const requiredQty = comboProduct.quantity * item.quantity;
+          if (comboProduct.product.quantity < requiredQty) {
+            return res.status(400).json({ message: `Product ${comboProduct.product.name} in combo does not have enough stock` });
+          }
+          await Product.findByIdAndUpdate(comboProduct.product._id, { $inc: { quantity: -requiredQty } });
+        }
+        
+        const itemTotal = combo.price * item.quantity;
+        totalAmount += itemTotal;
+        saleItems.push({
+          type: 'combo',
+          combo: combo._id,
+          comboName: combo.name,
+          quantity: item.quantity,
+          unitPrice: combo.price,
+          total: itemTotal,
+          barcode: combo.barcode
+        });
+      } else {
+        const product = await Product.findById(item.product);
+        if (!product) {
+          return res.status(400).json({ message: `Product with id ${item.product} not found` });
+        }
+        
+        if (product.quantity < item.quantity) {
+          return res.status(400).json({ message: `Product ${product.name} does not have enough stock` });
+        }
+        
+        await Product.findByIdAndUpdate(product._id, { $inc: { quantity: -item.quantity } });
+        
+        // Also reduce RTO quantity if this product exists in RTO
+        const RTOProduct = require('../models/RTOProduct');
+        let remainingQty = item.quantity;
+        const rtoProducts = await RTOProduct.find({ 
+          $or: [
+            { product: product._id },
+            { barcode: product.barcode },
+            { productName: product.name }
+          ],
+          quantity: { $gt: 0 } 
+        });
+        
+        for (const rtoProduct of rtoProducts) {
+          if (rtoProduct.quantity > 0 && remainingQty > 0) {
+            const reduceQty = Math.min(rtoProduct.quantity, remainingQty);
+            await RTOProduct.findByIdAndUpdate(rtoProduct._id, { $inc: { quantity: -reduceQty } });
+            remainingQty -= reduceQty;
+          }
+        }
+        
+        const itemTotal = (item.unitPrice || product.price) * item.quantity;
+        totalAmount += itemTotal;
+        saleItems.push({
+          type: 'product',
           product: product._id,
           quantity: item.quantity,
-          unitPrice: usedPrice,
+          unitPrice: item.unitPrice || product.price,
           total: itemTotal,
           barcode: product.barcode
         });
-    // Deduct new quantity, but never allow stock to go negative
-    const newStock = availableStock - item.quantity;
-    await Product.findByIdAndUpdate(product._id, { quantity: Math.max(newStock, 0) });
+      }
     }
 
     // Update sale fields
@@ -100,10 +181,41 @@ exports.deleteSale = async (req, res) => {
     if (!sale) {
       return res.status(404).json({ message: 'Sale not found' });
     }
-    // Restore product quantities for each item in sale
+    
+    // Restore quantities for each item in sale
     for (const item of sale.items) {
-      await Product.findByIdAndUpdate(item.product, { $inc: { quantity: item.quantity } });
+      if (item.type === 'rto-product') {
+        // Restore RTO product quantity
+        const RTOProduct = require('../models/RTOProduct');
+        await RTOProduct.findByIdAndUpdate(item.rtoProduct, { $inc: { quantity: item.quantity } });
+        
+        // Also restore original product quantity if it exists
+        const rtoProduct = await RTOProduct.findById(item.rtoProduct).populate('product');
+        if (rtoProduct && rtoProduct.product) {
+          await Product.findByIdAndUpdate(rtoProduct.product._id, { $inc: { quantity: item.quantity } });
+        }
+      } else if (item.type === 'combo') {
+        // Restore combo product quantities
+        const combo = await Combo.findById(item.combo).populate('products.product');
+        if (combo) {
+          for (const comboProduct of combo.products) {
+            const restoreQty = comboProduct.quantity * item.quantity;
+            await Product.findByIdAndUpdate(comboProduct.product._id, { $inc: { quantity: restoreQty } });
+          }
+        }
+      } else {
+        // Restore regular product quantity
+        await Product.findByIdAndUpdate(item.product, { $inc: { quantity: item.quantity } });
+        
+        // Also restore RTO quantity if this product exists in RTO
+        const RTOProduct = require('../models/RTOProduct');
+        const rtoProduct = await RTOProduct.findOne({ product: item.product });
+        if (rtoProduct) {
+          await RTOProduct.findByIdAndUpdate(rtoProduct._id, { $inc: { quantity: item.quantity } });
+        }
+      }
     }
+    
     await Sale.findByIdAndDelete(saleId);
     res.json({ message: 'Sale deleted and product quantities restored' });
   } catch (error) {
@@ -182,7 +294,50 @@ exports.createSale = async (req, res) => {
     let totalAmount = 0;
     
     for (const item of items) {
-      if (item.type === 'combo') {
+      if (item.type === 'rto-product') {
+        // Handle RTO product item
+        const RTOProduct = require('../models/RTOProduct');
+        const rtoProduct = await RTOProduct.findById(item.rtoProduct).populate('product');
+        if (!rtoProduct) {
+          return res.status(400).json({ message: `RTO Product with id ${item.rtoProduct} not found` });
+        }
+        
+        const requiredQty = item.quantity || 1;
+        if (rtoProduct.quantity < requiredQty) {
+          return res.status(400).json({ 
+            message: `RTO Product ${rtoProduct.productName} does not have enough stock. Required: ${requiredQty}, Available: ${rtoProduct.quantity}` 
+          });
+        }
+        
+        // Also check if the original product has enough stock
+        if (rtoProduct.product && rtoProduct.product.quantity < requiredQty) {
+          return res.status(400).json({ 
+            message: `Original product ${rtoProduct.product.name} does not have enough stock. Required: ${requiredQty}, Available: ${rtoProduct.product.quantity}` 
+          });
+        }
+        
+        const itemTotal = rtoProduct.price * requiredQty;
+        totalAmount += itemTotal;
+        
+        saleItems.push({
+          type: 'rto-product',
+          rtoProduct: rtoProduct._id,
+          productName: rtoProduct.productName,
+          quantity: requiredQty,
+          unitPrice: rtoProduct.price,
+          total: itemTotal,
+          barcode: rtoProduct.barcode
+        });
+        
+        // Reduce RTO product quantity
+        await RTOProduct.findByIdAndUpdate(rtoProduct._id, { $inc: { quantity: -requiredQty } });
+        
+        // Also reduce original product quantity if it exists
+        if (rtoProduct.product) {
+          await Product.findByIdAndUpdate(rtoProduct.product._id, { $inc: { quantity: -requiredQty } });
+        }
+        
+      } else if (item.type === 'combo') {
         // Handle combo item
         const combo = await Combo.findById(item.combo).populate('products.product');
         if (!combo) {
@@ -238,6 +393,29 @@ exports.createSale = async (req, res) => {
         
         // Track the deduction
         productDeductions.set(product._id.toString(), totalRequired);
+        
+        // Also reduce RTO quantity if this product exists in RTO
+        const RTOProduct = require('../models/RTOProduct');
+        console.log('Looking for RTO product with barcode:', product.barcode);
+        const rtoProducts = await RTOProduct.find({ 
+          $or: [
+            { product: product._id },
+            { barcode: product.barcode },
+            { productName: product.name }
+          ],
+          quantity: { $gt: 0 } 
+        });
+        console.log('Found RTO products:', rtoProducts.length, rtoProducts);
+        
+        for (const rtoProduct of rtoProducts) {
+          if (rtoProduct.quantity > 0) {
+            const reduceQty = Math.min(rtoProduct.quantity, requiredQty);
+            console.log(`Reducing RTO product ${rtoProduct._id} by ${reduceQty}`);
+            await RTOProduct.findByIdAndUpdate(rtoProduct._id, { $inc: { quantity: -reduceQty } });
+            requiredQty -= reduceQty;
+            if (requiredQty <= 0) break;
+          }
+        }
         
         const itemTotal = (item.unitPrice || product.price) * requiredQty;
         totalAmount += itemTotal;
@@ -302,8 +480,29 @@ exports.createSale = async (req, res) => {
 exports.scanBarcode = async (req, res) => {
   try {
     const { barcode } = req.body;
+    const RTOProduct = require('../models/RTOProduct');
     
-    // First try to find a product with this barcode
+    // First check if this is an RTO product barcode
+    const rtoProduct = await RTOProduct.findOne({ barcode }).populate('product');
+    if (rtoProduct && rtoProduct.quantity > 0) {
+      return res.json({
+        type: 'rto-product',
+        rtoProduct: {
+          _id: rtoProduct._id,
+          rtoId: rtoProduct.rtoId,
+          productName: rtoProduct.productName,
+          barcode: rtoProduct.barcode,
+          price: rtoProduct.price,
+          quantity: rtoProduct.quantity,
+          category: rtoProduct.category,
+          product: rtoProduct.product
+        },
+        price: rtoProduct.price,
+        barcode: rtoProduct.barcode,
+      });
+    }
+    
+    // Then try to find a regular product with this barcode
     const product = await Product.findOne({ barcode }).populate('category', 'name code');
     if (product) {
       return res.json({

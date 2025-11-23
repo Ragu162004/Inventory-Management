@@ -1585,6 +1585,45 @@ const Sales = () => {
         setScannedCode("");
         setError("");
         
+      } else if (scannedItem.type === 'rto-product') {
+        // Handle RTO product barcode
+        const rtoProduct = scannedItem.rtoProduct;
+        
+        // Check if this RTO product barcode already exists in items
+        const existingItemIndex = formData.items.findIndex(item => item.barcode === scannedCode && item.type === 'rto-product');
+        
+        setFormData((prev) => {
+          let newItems = [...prev.items];
+          
+          if (existingItemIndex !== -1) {
+            // Increment quantity of existing RTO product
+            newItems[existingItemIndex] = {
+              ...newItems[existingItemIndex],
+              quantity: (newItems[existingItemIndex].quantity || 1) + 1
+            };
+          } else {
+            // Add new RTO product item
+            newItems.push({
+              type: 'rto-product',
+              rtoProduct: rtoProduct._id,
+              rtoProductData: rtoProduct,
+              quantity: 1,
+              unitPrice: rtoProduct.price,
+              barcode: scannedCode,
+            });
+          }
+          
+          // Recalculate totals with new items
+          return calculateTotals({
+            ...prev,
+            items: newItems
+          });
+        });
+        
+        showSuccess(`RTO Product "${rtoProduct.productName}" added to cart`);
+        setScannedCode("");
+        setError("");
+        
       } else if (scannedItem.type === 'product') {
         // Handle product barcode (existing logic)
         const product = scannedItem.product;
@@ -1952,6 +1991,14 @@ const Sales = () => {
               unitPrice: item.unitPrice,
               barcode: item.barcode
             };
+          } else if (item.type === 'rto-product') {
+            return {
+              type: 'rto-product',
+              rtoProduct: item.rtoProduct, // Send RTO product ID
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              barcode: item.barcode
+            };
           } else {
             return {
               type: 'product',
@@ -2241,7 +2288,7 @@ const Sales = () => {
                   <div>
                     <strong>{sale.buyer?.name || 'N/A'}</strong>
                     {sale.buyer?.phone && (
-                      <div><small className="text-muted">{sale.buyer.phone}</small></div>
+                      <div><small className="text-muted">{String(sale.buyer.phone)}</small></div>
                     )}
                   </div>
                 </td>
@@ -2478,11 +2525,12 @@ const Sales = () => {
                 <tbody>
                   {formData.items.map((item, index) => {
                     const isCombo = item.type === 'combo';
-                    const itemData = isCombo ? item.comboData : item.productData;
-                    const itemName = itemData?.name || 'N/A';
+                    const isRTO = item.type === 'rto-product';
+                    const itemData = isCombo ? item.comboData : isRTO ? item.rtoProductData : item.productData;
+                    const itemName = isRTO ? itemData?.productName : itemData?.name || 'N/A';
                     const itemDescription = itemData?.description || '';
-                    const itemCategory = isCombo ? 'Combo Package' : (itemData?.category || 'Unknown');
-                    const lowStock = !isCombo && itemData?.currentStock <= itemData?.minStock;
+                    const itemCategory = isCombo ? 'Combo Package' : isRTO ? `RTO (${itemData?.category})` : (itemData?.category || 'Unknown');
+                    const lowStock = !isCombo && !isRTO && itemData?.currentStock <= itemData?.minStock;
                     
                     return (
                       <tr key={index} className={lowStock ? 'table-warning' : ''}>
@@ -2495,12 +2543,13 @@ const Sales = () => {
                         <td>
                           <div style={{ fontWeight: 'bold' }}>
                             {isCombo && <span className="badge bg-success me-1">COMBO</span>}
-                            {itemName}
+                            {isRTO && <span className="badge bg-warning me-1">RTO</span>}
+                            {String(itemName || '')}
                           </div>
                           {itemDescription && (
                             <small className="text-muted">
-                              {itemDescription.substring(0, 30)}
-                              {itemDescription.length > 30 ? '...' : ''}
+                              {String(itemDescription).substring(0, 30)}
+                              {String(itemDescription).length > 30 ? '...' : ''}
                             </small>
                           )}
                           {isCombo && item.comboData?.products && (
@@ -2511,7 +2560,7 @@ const Sales = () => {
                             </div>
                           )}
                         </td>
-                        <td>{itemCategory}</td>
+                        <td>{String(itemCategory || '')}</td>
                         <td>{item.unitPrice.toFixed(2)}</td>
                         <td>{item.quantity}</td>
                         <td>{(item.unitPrice * item.quantity).toFixed(2)}</td>
@@ -2861,10 +2910,10 @@ const Sales = () => {
                               )}
                             </div>
                           </td>
-                          <td>{itemCategory}</td>
+                          <td>{String(itemCategory || '')}</td>
                           <td>
                             <BarcodeBadge bg={isCombo ? 'success' : 'info'}>
-                              {barcode}
+                              {String(barcode || '')}
                             </BarcodeBadge>
                           </td>
                           <td>₹{unitPrice.toFixed(2)}</td>
@@ -3094,8 +3143,8 @@ const Sales = () => {
                               itemName
                             )}
                           </td>
-                          <td>{itemCategory}</td>
-                          <td>{barcode}</td>
+                          <td>{String(itemCategory || '')}</td>
+                          <td>{String(barcode || '')}</td>
                           <td>₹{unitPrice.toFixed(2)}</td>
                           <td>{quantity}</td>
                           <td>₹{itemTotal.toFixed(2)}</td>

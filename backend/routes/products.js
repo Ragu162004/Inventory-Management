@@ -10,7 +10,8 @@ const {
   createProduct,
   updateProduct,
   deleteProduct,
-  getLowStockProducts
+  getLowStockProducts,
+  addToRTO
 } = require('../controllers/productController');
 
 router.get('/', getAllProducts);
@@ -18,6 +19,7 @@ router.get('/low-stock', getLowStockProducts);
 router.get('/barcode/:barcode', getProductByBarcode);
 router.get('/:id', getProductById);
 router.post('/',productController.upload.single('photo'),productController.createProduct);
+router.post('/:id/add-to-rto', addToRTO);
 router.put('/:id', productController.upload.single('photo'), updateProduct);
 router.delete('/:id', deleteProduct);
 
